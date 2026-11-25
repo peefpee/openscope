@@ -9,7 +9,7 @@ import Fms from '../FlightManagementSystem/Fms';
 import ModeController from '../ModeControl/ModeController';
 import NavigationLibrary from '../../navigationLibrary/NavigationLibrary';
 import { MCP_MODE } from '../ModeControl/modeControlConstants';
-import { FLIGHT_PHASE } from '../../constants/aircraftConstants';
+import { FLIGHT_PHASE, FLIGHT_RULES } from '../../constants/aircraftConstants';
 import { INVALID_NUMBER } from '../../constants/globalConstants';
 import { radians_normalize } from '../../math/circle';
 import {
@@ -151,6 +151,9 @@ export default class Pilot {
         this._mcp.setAltitudeFieldValue(clampedAltitude);
         this._mcp.setAltitudeHold();
         this._mcp.shouldExpediteAltitudeChange = false;
+        if (aircraftModel.vfrOrbit) {
+            aircraftModel.vfrOrbit.altitude = clampedAltitude;
+        }
 
         // Build readback
         const readbackAltitude = _floor(clampedAltitude, -2);
@@ -199,6 +202,7 @@ export default class Pilot {
 
         this.cancelApproachClearance(aircraftModel);
         this.cancelHoldingPattern();
+        aircraftModel.vfrOrbit = null;
         this._mcp.setHeadingFieldValue(correctedHeading);
         this._mcp.setHeadingHold();
 
@@ -228,6 +232,7 @@ export default class Pilot {
      */
     maintainPresentHeading(aircraftModel) {
         this.cancelApproachClearance(aircraftModel);
+        aircraftModel.vfrOrbit = null;
         this._mcp.setHeadingFieldValue(aircraftModel.heading);
         this._mcp.setHeadingHold();
 
@@ -936,7 +941,42 @@ export default class Pilot {
      * @param waypointName {string}  name of the fix we are flying direct to
      * @return {array}               [success of operation, readback]
      */
-    proceedDirect(waypointName) {
+    proceedDirect(waypointName, aircraftModel = null) {
+        if (aircraftModel && aircraftModel.rules === FLIGHT_RULES.VFR) {
+            const targetName = waypointName.toUpperCase();
+            const fix = NavigationLibrary.findFixByName(targetName);
+            const inLibrary = Boolean(fix && fix.isRealFix);
+            const inFms = !targetName.startsWith('_') && this._fms.hasWaypointName(targetName);
+
+            if (!inLibrary && !inFms) {
+                const readback = {
+                    log: `cannot proceed direct to ${targetName}, unknown fix`,
+                    say: `cannot proceed direct to ${NavigationLibrary.getFixSpokenName(targetName)}, unknown fix`
+                };
+                return [false, readback];
+            }
+
+            if (inLibrary) {
+                const [replaced, response] = this._fms.replaceFlightPlanWithNewRoute(targetName);
+
+                if (!replaced) {
+                    return [false, response];
+                }
+            } else {
+                this._fms.skipToWaypointName(targetName);
+            }
+
+            aircraftModel.vfrOrbit = null;
+            this.cancelHoldingPattern();
+            this._mcp.setHeadingLnav();
+
+            const readback = {
+                log: `proceed direct ${targetName}`,
+                say: `proceed direct ${NavigationLibrary.getFixSpokenName(targetName)}`
+            };
+            return [true, readback];
+        }
+
         if (!this._fms.hasWaypointName(waypointName)) {
             const readback = {
                 log: `cannot proceed direct to ${waypointName}, it does not exist in our flight plan`,

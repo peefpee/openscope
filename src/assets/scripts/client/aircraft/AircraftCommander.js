@@ -365,7 +365,14 @@ export default class AircraftCommander {
             fallbackInboundHeading = fixModel.positionModel.bearingFromPosition(aircraft.positionModel);
         }
 
-        return aircraft.pilot.initiateHoldingPattern(fixName, holdParameters, fallbackInboundHeading);
+        const readback = aircraft.pilot.initiateHoldingPattern(fixName, holdParameters, fallbackInboundHeading);
+
+        if (readback[0] && aircraft.vfrOrbit) {
+            aircraft.vfrOrbit = null;
+            aircraft.mcp.setHeadingLnav();
+        }
+
+        return readback;
     }
 
     /**
@@ -396,7 +403,7 @@ export default class AircraftCommander {
 
         aircraft.target.turn = null;
 
-        return aircraft.pilot.proceedDirect(fixName);
+        return aircraft.pilot.proceedDirect(fixName, aircraft);
     }
 
     /**
@@ -531,6 +538,7 @@ export default class AircraftCommander {
         // Only change to LNAV mode if the route was applied successfully, else
         // continue with the previous instructions (whether a heading, etc)
         if (readback[0]) {
+            aircraft.vfrOrbit = null;
             aircraft.mcp.setHeadingLnav();
         }
 
@@ -803,6 +811,10 @@ export default class AircraftCommander {
             const orbit = clearOrbit(AirportController.current, aircraft.positionModel, aircraft.altitude);
             if (!orbit) return [false, 'unable to remain OCTA from present position'];
             aircraft.pilot.cancelApproachClearance(aircraft);
+            aircraft.mcp.setAltitudeFieldValue(orbit.altitude);
+            aircraft.mcp.setAltitudeHold();
+            aircraft.mcp.headingMode = MCP_MODE.HEADING.OFF;
+            aircraft.target.turn = null;
             aircraft.vfrOrbit = orbit;
         }
         return [true, 'remaining outside controlled airspace'];

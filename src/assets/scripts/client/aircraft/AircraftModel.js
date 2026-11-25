@@ -508,17 +508,26 @@ export default class AircraftModel {
         } else if (this.category !== FLIGHT_CATEGORY.ARRIVAL && this.category !== FLIGHT_CATEGORY.OVERFLIGHT) {
             throw new Error('Invalid #category found in AircraftModel');
         } else {
-            const bottomAltitude = this.fms.getBottomAltitude();
+            const isVfr = this.rules === FLIGHT_RULES.VFR;
+            const bottomAltitude = isVfr ? -1 : this.fms.getBottomAltitude();
             const airportModel = AirportController.airport_get();
             const airspaceCeiling = airportModel.maxAssignableAltitude;
+            const initialAltitude = isVfr && this.vfrOrbit && this.vfrOrbit.altitude != null ?
+                this.vfrOrbit.altitude :
+                this.altitude;
 
             this.mcp.initializeForAirborneFlight(
                 bottomAltitude,
                 airspaceCeiling,
-                this.altitude,
+                initialAltitude,
                 this.heading,
                 this.speed
             );
+
+            if (isVfr) {
+                this.mcp.headingMode = MCP_MODE.HEADING.OFF;
+                this.mcp.speedMode = MCP_MODE.SPEED.OFF;
+            }
         }
     }
 
@@ -1388,8 +1397,13 @@ export default class AircraftModel {
             }
             this.targetGroundTrack = this.vfrOrbit.reportingPoint ?
                 this.positionModel.bearingToPosition(this.vfrOrbit.reportingPoint.position) : orbitTrack(this.vfrOrbit, this.positionModel);
-            this.target.altitude = this.vfrOrbit.altitude;
-            this.target.speed = this.model.speed.cruise;
+            this.target.altitude = this.mcp.altitudeMode === MCP_MODE.ALTITUDE.HOLD ?
+                _defaultTo(this._calculateTargetedAltitude(), this.vfrOrbit.altitude) :
+                this.vfrOrbit.altitude;
+            this.target.speed = this.mcp.speedMode === MCP_MODE.SPEED.HOLD ?
+                _defaultTo(this._calculateTargetedSpeed(), this.model.speed.cruise) :
+                this.model.speed.cruise;
+            this.overrideTarget();
             return;
         }
         const guidance = this.pilot.approachGuidance;
