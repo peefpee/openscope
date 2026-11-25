@@ -179,6 +179,89 @@
       ]
     },
     {
+      "id": "outbound",
+      "variants": [
+        {
+          "aliases": [
+            "outbound"
+          ],
+          "altkeys": [],
+          "explain": "assign departure <u>outbound fix</u>"
+        }
+      ],
+      "paramsets": [
+        {
+          "example": "KANLI",
+          "candidate": "^[a-z0-9]*$",
+          "validate": "^([a-z0-9]+)$",
+          "explain": "assign departure <u>outbound fix</u>"
+        }
+      ]
+    },
+    {
+      "id": "centre",
+      "variants": [
+        {
+          "aliases": [
+            "centre",
+            "center"
+          ],
+          "altkeys": [],
+          "explain": "transfer departure to Centre"
+        }
+      ],
+      "paramsets": [
+        {
+          "example": "",
+          "candidate": "^$",
+          "validate": "^$",
+          "explain": "transfer departure to Centre"
+        }
+      ]
+    },
+    {
+      "id": "rnav",
+      "variants": [
+        {
+          "aliases": [
+            "rnav"
+          ],
+          "altkeys": [],
+          "explain": "clear RNAV via <u>waypoint</u> to <u>runway</u>"
+        }
+      ],
+      "paramsets": [
+        {
+          "example": "BUSKA 12",
+          "explain": "clear RNAV via <u>waypoint</u> to <u>runway</u>",
+          "candidate": "^[a-z0-9]*([ ][0-9lcr]*)?$",
+          "validate": "^([a-z0-9]+) ((?:0?[1-9]|[12][0-9]|3[0-6])[lcr]?)$"
+        }
+      ]
+    },
+    {
+      "id": "vis",
+      "variants": [
+        {
+          "aliases": [
+            "vis"
+          ],
+          "altkeys": [
+            "visual"
+          ],
+          "explain": "clear visual approach to <u>runway</u>"
+        }
+      ],
+      "paramsets": [
+        {
+          "example": "12",
+          "explain": "clear visual approach to <u>runway</u>",
+          "candidate": "^[0-9lcr]*$",
+          "validate": "^((?:0?[1-9]|[12][0-9]|3[0-6])[lcr]?)$"
+        }
+      ]
+    },
+    {
       "id": "hold",
       "variants": [
         {

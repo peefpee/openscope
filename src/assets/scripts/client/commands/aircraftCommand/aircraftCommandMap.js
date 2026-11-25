@@ -114,6 +114,31 @@ export const AIRCRAFT_COMMAND_MAP = {
         functionName: 'runIls',
         isSystemCommand: false
     },
+    outbound: {
+        aliases: ['outbound'],
+        functionName: 'runOutbound',
+        isSystemCommand: false
+    },
+    centre: {
+        aliases: ['centre', 'center'],
+        functionName: 'runCentre',
+        isSystemCommand: false
+    },
+    octa: { aliases: ['octa'], functionName: 'runOcta', isSystemCommand: false },
+    dw: { aliases: ['dw'], functionName: 'runCircuit', isSystemCommand: false },
+    xw: { aliases: ['xw'], functionName: 'runCircuit', isSystemCommand: false },
+    base: { aliases: ['base'], functionName: 'runCircuit', isSystemCommand: false },
+    final: { aliases: ['final'], functionName: 'runCircuit', isSystemCommand: false },
+    rnav: {
+        aliases: ['rnav'],
+        functionName: 'runRnav',
+        isSystemCommand: false
+    },
+    vis: {
+        aliases: ['vis'],
+        functionName: 'runVisual',
+        isSystemCommand: false
+    },
     land: {
         aliases: ['land'],
         functionName: 'runLand',

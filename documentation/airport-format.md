@@ -307,6 +307,8 @@ Position definition of the airport airspace.  Multiple airspace areas may be def
 
 ### Fixes
 
+The simulator uses `fixes` for IFR traffic and controller clearances. The DAT importer stores nearby visual reporting points in a separate `vfrWaypoints` array for future VFR traffic. Each entry contains its `id`, spoken or printed `name`, owning `airport` (or `ENRT`), ICAO `region`, and decimal-degree `position` as [latitude, longitude]. Identifiers may repeat across regions or owners.
+
 All fixes listed within the Standard Routes need to be defined within this section
 
 ```json

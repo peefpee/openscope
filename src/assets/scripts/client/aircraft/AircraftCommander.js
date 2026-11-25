@@ -1,3 +1,4 @@
+import { clearOrbit } from './Pilot/VfrArrival';
 import _has from 'lodash/has';
 import _isNil from 'lodash/isNil';
 import _map from 'lodash/map';
@@ -64,6 +65,8 @@ export default class AircraftCommander {
             }
 
             let retval = this.run(aircraft, command, args);
+            // A successful handoff has already produced its radio call.
+            if (aircraft.transferredToCentre) break;
 
             if (retval) {
                 if (!retval[0]) {
@@ -90,7 +93,7 @@ export default class AircraftCommander {
             }
         }
 
-        for (let i = 0; i < deferred.length; i += 1) {
+        for (let i = 0; i < deferred.length && !aircraft.transferredToCentre; i += 1) {
             const command = deferred[i][0];
             const args = deferred[i][1];
             const retval = this.run(aircraft, command, args);
@@ -133,7 +136,7 @@ export default class AircraftCommander {
             const r_log = _map(response, (r) => r.log).join(', ');
             const r_say = _map(response, (r) => r.say).join(', ');
 
-            UiController.ui_log(`${aircraft.callsign}, ${r_log} ${response_end}`, redResponse);
+            UiController.ui_log(`${aircraft.readbackCallsign}, ${r_log} ${response_end}`, redResponse);
             speech_say(
                 [
                     { type: 'callsign', content: aircraft },
@@ -161,7 +164,26 @@ export default class AircraftCommander {
             return [false, 'say again?'];
         }
 
-        return this[functionName](aircraft, data);
+        if (functionName === 'runCircuit') {
+            if (aircraft.rules !== 'vfr' || !/^Y/i.test(AirportController.current.icao)) return [false, 'VFR arrivals only'];
+            return aircraft.pilot.joinApproach(aircraft, data[0], null, command, data[1]);
+        }
+        const result = this[functionName](aircraft, data);
+        // Successful lateral clearances supersede the approach. Preserve any
+        // new LNAV mode selected by the command.
+        if (result && result[0] && aircraft.pilot && aircraft.pilot.approachGuidance &&
+            ['direct', 'hold', 'reroute', 'expectArrivalRunway', 'descendViaStar'].includes(command)) {
+            const lnav = aircraft.mcp.headingMode === MCP_MODE.HEADING.LNAV;
+            const vnav = aircraft.mcp.altitudeMode === MCP_MODE.ALTITUDE.VNAV;
+            const altitude = aircraft.mcp.altitude;
+            aircraft.pilot.cancelApproachClearance(aircraft);
+            if (lnav) aircraft.mcp.setHeadingLnav();
+            if (vnav) {
+                aircraft.mcp.setAltitudeFieldValue(altitude);
+                aircraft.mcp.setAltitudeVnav();
+            }
+        }
+        return result;
     }
 
     /**
@@ -705,7 +727,7 @@ export default class AircraftCommander {
         }
 
         if (spotInQueue > 0) {
-            readback.log = `number ${spotInQueue} behind ${aircraftAhead.callsign}`;
+            readback.log = `number ${spotInQueue} behind ${aircraftAhead.readbackCallsign}`;
             readback.say = `number ${spotInQueue} behind ${aircraftAhead.getRadioCallsign()}`;
 
             return [false, readback];
@@ -751,6 +773,47 @@ export default class AircraftCommander {
         const runwayModel = AirportController.airport_get().getRunway(runwayName);
 
         return aircraft.pilot.conductInstrumentApproach(aircraft, approachType, runwayModel);
+    }
+
+    runOutbound(aircraft, [waypoint]) {
+        if (!aircraft.isDeparture()) return [false, 'outbound fixes apply to departures'];
+        const fix = NavigationLibrary.findFixByName(waypoint.toUpperCase());
+        if (!fix || !fix.isRealFix) return [false, `unknown outbound waypoint ${waypoint.toUpperCase()}`];
+        const ground = aircraft.isOnGround();
+        aircraft.fms.setDepartureOutbound(fix.name, ground);
+        if (!ground) {
+            aircraft.target.turn = null;
+            aircraft.mcp.setHeadingLnav();
+        }
+        const readback = (name) => ground ? `outbound fix ${name}` : `direct ${name} for Centre`;
+        return [true, { log: readback(fix.name), say: readback(NavigationLibrary.getFixSpokenName(fix.name)) }];
+    }
+
+    runCentre(aircraft) {
+        if (!aircraft.isDeparture()) return [false, 'Centre transfer applies to departures'];
+        if (!aircraft.transferToCentre()) return [false, 'unable until airborne and tracking the outbound fix'];
+        return [true, 'roger'];
+    }
+
+    runOcta(aircraft) {
+        if (aircraft.rules !== 'vfr' || aircraft.isOnGround() || !/^Y/i.test(AirportController.current.icao)) {
+            return [false, 'airborne Australian VFR arrivals only'];
+        }
+        if (!aircraft.vfrOrbit) {
+            const orbit = clearOrbit(AirportController.current, aircraft.positionModel, aircraft.altitude);
+            if (!orbit) return [false, 'unable to remain OCTA from present position'];
+            aircraft.pilot.cancelApproachClearance(aircraft);
+            aircraft.vfrOrbit = orbit;
+        }
+        return [true, 'remaining outside controlled airspace'];
+    }
+
+    runRnav(aircraft, [waypoint, runway]) {
+        return aircraft.pilot.joinApproach(aircraft, runway, waypoint.toUpperCase());
+    }
+
+    runVisual(aircraft, [runway]) {
+        return aircraft.pilot.joinApproach(aircraft, runway);
     }
 
     /**

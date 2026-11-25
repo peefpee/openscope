@@ -376,7 +376,7 @@ export const radio_heading = (heading) => {
  * @return
  */
 export const radio_spellOut = (alphanumeric) => {
-    const str = alphanumeric.toString();
+    const str = alphanumeric.toString().toLowerCase();
     const arr = [];
 
     if (!str) {

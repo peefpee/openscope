@@ -154,7 +154,7 @@ class AirportController {
         }
 
         const nextAirportModel = this.airports[icao];
-        this.current = nextAirportModel;
+        this._selectAirport(nextAirportModel);
 
         // if loaded is true, we wont need to load any data thus the call to `onAirportChange` within the
         // success callback will never fire so we do that here.
@@ -163,6 +163,27 @@ class AirportController {
         }
 
         nextAirportModel.set(airportJson);
+    }
+
+    openImportedAirport(data) {
+        if (this.current && this.current.data === data) {
+            return;
+        }
+
+        const airport = new AirportModel(data);
+        airport.data = data;
+        airport.loaded = true;
+        this._selectAirport(airport);
+        this._eventBus.trigger(EVENT.AIRPORT_CHANGE, data);
+        airport.set();
+    }
+
+    _selectAirport(airport) {
+        if (this.current && this.current.data.isDatImport) {
+            this.current.releaseWindListener();
+        }
+
+        this.current = airport;
     }
 
     /**
@@ -184,7 +205,7 @@ class AirportController {
      * @return {AirportModel}
      */
     airport_get(icao) {
-        if (!icao) {
+        if (!icao || (this.current && this.current.icao === icao.toLowerCase())) {
             return this.current;
         }
 

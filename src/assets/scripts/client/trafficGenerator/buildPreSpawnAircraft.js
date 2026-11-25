@@ -149,7 +149,7 @@ export function _calculateIdealSpawnAltitudeAtOffset(
         firstAltitudeRestriction = [totalDistance, airspaceCeiling];
     }
 
-    if (offsetDistance >= firstAltitudeRestriction[indexOfDistance]) {
+    if (altitudeOffsets.length && offsetDistance >= firstAltitudeRestriction[indexOfDistance]) {
         return _calculateAltitudeAtOffset(altitudeOffsets, offsetDistance);
     }
 
@@ -251,6 +251,10 @@ function _calculateSpawnPositionsAndAltitudes(
  * @return spawnOffsets {array<number>} distances along route, in nm
  */
 const _assembleSpawnOffsets = (entrailDistance, totalDistance = 0) => {
+    if (totalDistance <= 3) {
+        return [0];
+    }
+
     const offsetClosestToAirspace = totalDistance - 3;
     // dont spawn aircraft closer than 6 MIT
     const clampedEntrailDistance = Math.max(6, entrailDistance);
@@ -298,6 +302,11 @@ const _assembleSpawnOffsets = (entrailDistance, totalDistance = 0) => {
  * @return {number}
  */
 const _calculateTotalDistanceAlongRoute = (waypointModelList, airport) => {
+    const first = waypointModelList[0];
+    if (!first.isVectorWaypoint && airport.airspace.some((area) => area.isPointInside2D(first.relativePosition))) {
+        return 0;
+    }
+
     // find last fix along STAR that is outside of airspace, ie: next fix is within airspace
     // distance between closest fix outside airspace and airspace border in nm
     let totalDistance = 0;

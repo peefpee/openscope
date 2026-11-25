@@ -400,6 +400,7 @@ export default class StripViewModel extends BaseModel {
 
         this.insideCenter = insideCenter;
         this._callsign = callsign;
+        this._rulesLabel = aircraftModel.rules === 'vfr' ? 'V' : 'I';
         this._transponder = transponderCode;
         this._aircraftType = icaoWithWeightClass;
         this._assignedAltitude = assignedAltitude;
@@ -425,6 +426,7 @@ export default class StripViewModel extends BaseModel {
      */
     _createChildren() {
         this.$element = $(STRIP_VIEW_TEMPLATE);
+        this.$element.find('.js-stripView-flightRules').text(this._rulesLabel);
         this.$callsignView = this.$element.find(SELECTORS.CLASSNAMES.STRIP_VIEW_CALLSIGN);
         this.$aircraftTypeView = this.$element.find(SELECTORS.CLASSNAMES.STRIP_VIEW_AIRCRAFT_TYPE);
         this.$cidView = this.$element.find(SELECTORS.CLASSNAMES.STRIP_VIEW_CID);

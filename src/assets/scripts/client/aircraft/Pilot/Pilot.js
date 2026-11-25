@@ -3,6 +3,8 @@ import _find from 'lodash/find';
 import _floor from 'lodash/floor';
 import _isNil from 'lodash/isNil';
 import AirportController from '../../airport/AirportController';
+import { circuitPoints } from './VfrArrival';
+import { ApproachGuidance, planApproach } from './ApproachGuidance';
 import Fms from '../FlightManagementSystem/Fms';
 import ModeController from '../ModeControl/ModeController';
 import NavigationLibrary from '../../navigationLibrary/NavigationLibrary';
@@ -73,6 +75,7 @@ export default class Pilot {
          * @default false
          */
         this.hasApproachClearance = false;
+        this.approachGuidance = null;
 
         /**
          * Whether the aircraft has received an IFR clearance to their destination
@@ -96,6 +99,7 @@ export default class Pilot {
         this._fms = fms;
         this._mcp = modeController;
         this.hasApproachClearance = false;
+        this.approachGuidance = null;
         this.hasDepartureClearance = false;
 
         return this;
@@ -110,6 +114,7 @@ export default class Pilot {
         this._fms = null;
         this._mcp = null;
         this.hasApproachClearance = false;
+        this.approachGuidance = null;
         this.hasDepartureClearance = false;
 
         return this;
@@ -388,7 +393,9 @@ export default class Pilot {
         this._mcp.setHeadingHold();
         this._mcp.setSpeedHold();
 
+        if (this.approachGuidance) aircraftModel.setFlightPhase(FLIGHT_PHASE.DESCENT);
         this.hasApproachClearance = false;
+        this.approachGuidance = null;
 
         const readback = 'cancel approach clearance, fly present heading, ' +
             'maintain last assigned altitude and speed';
@@ -754,6 +761,43 @@ export default class Pilot {
         return [true, 'intercept glidepath'];
     }
 
+    joinApproach(aircraft, runwayName, entry, leg, side) {
+        if (entry && aircraft.rules === 'vfr') return [false, 'unable RNAV approach, VFR'];
+        const airport = AirportController.airport_get();
+        const runway = airport.getRunway(runwayName.toUpperCase().replace(/^(\d)([LCR]?)$/, '0$1$2'));
+        if (leg && (!runway || aircraft.isOnGround())) return [false, 'unable to join that circuit'];
+        const right = side ? side === 'r' : aircraft.rightCircuit || false;
+        const legName = { dw: 'downwind', xw: 'crosswind', base: 'base', final: 'final' }[leg];
+        const [success, guidance] = leg ? [true, new ApproachGuidance(runway,
+            circuitPoints(runway, leg, right, aircraft.model.speed.landing * 1.35), legName)] :
+            planApproach(aircraft, airport, runway, entry);
+        if (!success) {
+            const say = entry ? guidance.replace(/(via |waypoint )([A-Z0-9_]+)/g, (match, prefix, fix) =>
+                prefix + NavigationLibrary.getFixSpokenName(fix, true)) : guidance;
+            return [false, { log: guidance, say }];
+        }
+
+        this.cancelHoldingPattern();
+        this._fms.setArrivalRunway(runway);
+        this._interceptCourse(runway.positionModel, runway.angle);
+        this._interceptGlidepath(runway.positionModel, runway.angle, runway.ils.glideslopeGradient);
+        this.hasApproachClearance = true;
+        this.approachGuidance = guidance;
+        aircraft.vfrOrbit = null;
+        if (leg) aircraft.rightCircuit = right;
+        aircraft.target.turn = null;
+        aircraft.setFlightPhase(FLIGHT_PHASE.DESCENT);
+        if (leg) return [true, `joining ${leg === 'final' ? '' : right ? 'right ' : 'left '}${legName} runway ${runway.name}`];
+        const spokenVia = entry ? ` via ${NavigationLibrary.getFixSpokenName(entry, true)}` : '';
+        const spokenName = guidance.name.replace(/^RNAV R\d{2}[LCR]?(?:-([A-Z]))?$/, (id, variant) =>
+            variant ? `RNAV ${radio_spellOut(variant)}` : 'RNAV');
+        const via = entry ? ` via ${entry}` : '';
+        return [true, {
+            log: `cleared ${guidance.name} approach runway ${runway.name}${via}`,
+            say: `cleared ${spokenName} approach runway ${radio_runway(runway.name)}${spokenVia}`
+        }];
+    }
+
     /**
      * Conduct the specified instrument approachType
      * Note: Currently only supports ILS approaches
@@ -767,6 +811,7 @@ export default class Pilot {
      * @return {array}                      [success of operation, readback]
      */
     conductInstrumentApproach(aircraftModel, approachType, runwayModel) {
+        if (aircraftModel.rules === 'vfr') return [false, 'unable instrument approach, VFR'];
         if (_isNil(runwayModel)) {
             return [false, 'the specified runway does not exist'];
         }
@@ -800,6 +845,7 @@ export default class Pilot {
             return verticalGuidance;
         }
 
+        this.approachGuidance = null;
         this.cancelHoldingPattern();
         this._fms.setArrivalRunway(runwayModel);
         this.hasApproachClearance = true;

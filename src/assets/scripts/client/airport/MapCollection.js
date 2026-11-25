@@ -113,9 +113,9 @@ export default class MapCollection extends BaseCollection {
      * @method getVisibleMapLines
      * @return {array<object>}
      */
-    getVisibleMapLines() {
+    getVisibleMapLines(excludedMap = null) {
         return this._items.reduce((sum, map) => {
-            if (map.isHidden) {
+            if (map.isHidden || map.name === excludedMap) {
                 return sum;
             }
 

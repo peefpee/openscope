@@ -76,7 +76,7 @@ export const speech_say = (sentence, pilotVoice) => {
             }
         }
 
-        const utterance = new SpeechSynthesisUtterance(textToSay); // make the object
+        const utterance = new SpeechSynthesisUtterance(textToSay.replace(/\bRNAV\b/gi, 'ar nav')); // make the object
         utterance.lang = 'en-US'; // set the language
         utterance.voice = prop.speech.synthesis.getVoices().filter((voice) => {
             // set the voice

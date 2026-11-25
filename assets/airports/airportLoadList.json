@@ -661,6 +661,12 @@
         "disabled": true
     },
     {
+        "icao": "yssy",
+        "level": "hard",
+        "name": "Sydney Kingsford Smith International Airport",
+        "premium": false
+    },
+    {
         "icao": "zspd",
         "level": "hard",
         "name": "Shanghai Pudong International Airport",

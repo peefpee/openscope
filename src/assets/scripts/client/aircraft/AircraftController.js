@@ -14,6 +14,7 @@ import AircraftCommander from './AircraftCommander';
 import AircraftConflict from './AircraftConflict';
 import StripViewController from './StripView/StripViewController';
 import GameController, { GAME_EVENTS } from '../game/GameController';
+import { vfrEntry } from './Pilot/VfrArrival';
 import CommandParser from '../commands/parsers/CommandParser';
 import { airlineNameAndFleetHelper } from '../airline/airlineHelpers';
 import { convertStaticPositionToDynamic } from '../base/staticPositionToDynamicPositionHelper';
@@ -399,7 +400,8 @@ export default class AircraftController {
 
         const normalizedCallsign = callsign.toUpperCase();
 
-        return _find(this.aircraft.list, (aircraft) => aircraft.callsign === normalizedCallsign);
+        return _find(this.aircraft.list, (aircraft) => aircraft.callsign === normalizedCallsign ||
+            aircraft.readbackCallsign === normalizedCallsign);
     }
 
     /**
@@ -468,8 +470,8 @@ export default class AircraftController {
      * @param airlineId {string}
      * @param callsign {string}
      */
-    removeFlightNumberFromList({ airlineId, callsign }) {
-        this._airlineController.removeFlightNumberFromList(airlineId, callsign);
+    removeFlightNumberFromList({ airlineId, flightNumber }) {
+        this._airlineController.removeFlightNumberFromList(airlineId, flightNumber);
     }
 
     /**
@@ -564,7 +566,24 @@ export default class AircraftController {
      * @param initializationProps {object}
      * @private
      */
+    createVfrArrival(pattern) {
+        const airport = AirportController.current;
+        if (!airport || !/^Y/i.test(airport.icao) || !pattern || this.aircraft.list.filter((a) => a.rules === 'vfr').length >= 4) return;
+        const entry = vfrEntry(airport);
+        if (!entry) return;
+        const props = this._buildAircraftProps(pattern, false, 'vh/lightGA');
+        this._createAircraftWithInitializationProps({ ...props, rules: 'vfr', orbit: entry.orbit,
+            positionModel: entry.position, altitude: entry.orbit.altitude, speed: props.model.speed.cruise,
+            heading: entry.orbit.reportingPoint ? entry.position.bearingToPosition(entry.orbit.reportingPoint.position) :
+                entry.orbit.center.bearingToPosition(entry.position) + Math.PI / 2, report: entry.report });
+    }
+
     _createAircraftWithInitializationProps(initializationProps) {
+        if (initializationProps.airline === 'vh' && initializationProps.category !== FLIGHT_CATEGORY.DEPARTURE) {
+            const { model } = initializationProps;
+            initializationProps.speed = Math.min(initializationProps.speed, model.speed.cruise);
+            initializationProps.altitude = Math.min(initializationProps.altitude, model.ceiling);
+        }
         const aircraftModel = new AircraftModel(initializationProps);
         const isDeparture = initializationProps.category === 'departure';
         const isArrival = initializationProps.category === 'arrival';
@@ -575,6 +594,10 @@ export default class AircraftController {
         // are listening for the event and aircraft model
         this._eventBus.trigger(EVENT.ADD_AIRCRAFT, aircraftModel);
 
+        if (aircraftModel.rules === 'vfr') {
+            aircraftModel.radioCall(`VFR arrival, ${initializationProps.report}, ${Math.round(aircraftModel.altitude)} feet, remaining OCTA`, 'app');
+            return;
+        }
         if (isArrival) {
             this._runCommandOnPreSpawnAircraft(aircraftModel, runwayCommands, aircraftModel.fms.arrivalRunwayModel.name);
         }
@@ -603,8 +626,7 @@ export default class AircraftController {
      * @return {object}
      * @private
      */
-    _buildAircraftProps(spawnPatternModel, isPreSpawn = false) {
-        const airlineId = spawnPatternModel.getRandomAirlineForSpawn();
+    _buildAircraftProps(spawnPatternModel, isPreSpawn = false, airlineId = spawnPatternModel.getRandomAirlineForSpawn()) {
         // TODO: update `airlineNameAndFleetHelper` to accept a string
         const { name, fleet } = airlineNameAndFleetHelper([airlineId]);
         let airlineModel = this._airlineController.findAirlineById(name);
@@ -629,7 +651,11 @@ export default class AircraftController {
             altitude = Math.min(18000, altitude);
         }
 
-        const dynamicPositionModel = convertStaticPositionToDynamic(spawnPatternModel.positionModel);
+        const entry = !isPreSpawn && spawnPatternModel.vectors && spawnPatternModel.isArrival() ?
+            spawnPatternModel.createVectorArrivalEntry() : {
+                heading: spawnPatternModel.heading,
+                positionModel: convertStaticPositionToDynamic(spawnPatternModel.positionModel)
+            };
         const transponderCode = this._generateUniqueTransponderCode(AirportController.airport_get().icao);
 
         return {
@@ -643,11 +669,11 @@ export default class AircraftController {
             airline: airlineModel.icao,
             airlineCallsign: airlineModel.radioName,
             speed: spawnPatternModel.speed,
-            heading: spawnPatternModel.heading,
-            positionModel: dynamicPositionModel,
+            ...entry,
+            vectors: spawnPatternModel.vectors,
             icao: aircraftTypeDefinition.icao,
             model: aircraftTypeDefinition,
-            routeString: spawnPatternModel.routeString,
+            routeString: spawnPatternModel.nextRouteString(),
             commands: spawnPatternModel.commands,
             // TODO: this may not be needed anymore
             waypoints: _get(spawnPatternModel, 'waypoints', [])
@@ -888,7 +914,7 @@ export default class AircraftController {
         if (aircraftModel.isArrival() && aircraftModel.isStopped() && !aircraftModel.hit) {
             EventBus.trigger(AIRCRAFT_EVENT.FULLSTOP, aircraftModel, aircraftModel.fms.arrivalRunwayModel);
 
-            UiController.ui_log(`${aircraftModel.callsign} switching to ground, good day`);
+            UiController.ui_log(`${aircraftModel.readbackCallsign} switching to ground, good day`);
             speech_say(
                 [
                     { type: 'callsign', content: aircraftModel },

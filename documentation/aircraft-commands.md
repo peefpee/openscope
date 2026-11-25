@@ -1,5 +1,8 @@
 # Aircraft Command Reference
 
+Australian general aviation aircraft display their full registration on the radar and flight strip. For `VHABC`, either `VHABC h 270` or `ABC h 270` assigns heading 270. The pilot uses `ABC` in the written readback and spells the three letters phonetically over the radio.
+
+
 ## Table of Contents
 
 [Departure Commands](#departure-commands)
@@ -14,6 +17,8 @@
 - [Expect Runway](#expect-runway)
 - [Descend via STAR](#descend-via-star)
 - [ILS](#ils)
+- [RNAV](#rnav)
+- [Visual approach](#visual-approach)
 
 [Routing Commands](#routing-commands)
 
@@ -153,6 +158,30 @@ the glideslope and land.
 Note: This replaces the old `land` / `l` command.
 
 _Syntax -_ `AAL123 i [runway]`
+
+### Departure outbound fix and Centre transfer
+
+The departure strip shows the handoff waypoint as `OUT`. A departure follows its filed route to that fix.
+Use `JST123 outbound KANLI` to change it. On the ground, the aircraft keeps its SID or initial departure leg.
+In the air, it turns direct to the named fix.
+
+For a vector departure, the aircraft initially holds runway heading. Use `JST123 direct KANLI` to send it to its filed outbound fix, or `outbound` to assign a new one.
+
+Once the aircraft is airborne and tracking the outbound fix, `JST123 centre` transfers it to Centre.
+`center` is also accepted. A departure still under your control transfers automatically when it reaches the fix
+or crosses the sector boundary while tracking it.
+
+### RNAV
+
+`JST123 rnav BUSKA 12` clears an arrival via BUSKA for runway 12. At a DAT airport,
+choose a waypoint on a resolved RNAV approach to that runway. The aircraft flies
+the remaining approach legs and joins final. For an airport without approach
+records, the simulator uses the named fix and generates a runway final.
+
+### Visual approach
+
+`JST123 vis 30` clears an arrival to join final and land on runway 30.
+An aircraft already established on final continues inbound.
 
 ## Routing Commands
 
@@ -494,3 +523,14 @@ _Syntax -_ `timewarp [rate]`
 _Information -_ Opens the tutorial.
 
 _Syntax -_ `tutorial`
+
+### Australian VFR arrivals
+
+Enable **VFR arrivals** in Traffic to start a light GA arrival and schedule further arrivals. The checkbox starts off at each airport. The pilot reports inbound to an available visual reporting point and again overhead. When there is no suitable point, the pilot reports distance and direction from the airport. The aircraft orbits outside controlled airspace until cleared for a visual arrival.
+
+- `ABC octa` instructs the pilot to remain outside controlled airspace. The pilot can decline if there is insufficient space to orbit.
+- `ABC dw 12 r` joins right downwind for runway 12. Use `l` for left. The initial default is left, and subsequent joins use the assigned circuit direction.
+- `ABC xw 12`, `ABC base 12` and `ABC final 12` join the corresponding leg and continue to land visually.
+- VFR arrivals decline ILS and RNAV clearances.
+
+Import X-Plane’s polygon-format `airspaces/airspace.txt` in the **+** dialog and enable **Airspace Depiction** to see the shelves. Where no local definition is available, an imported Australian scope uses a 10 NM Class C surface area and a 2,000 ft AGL shelf out to 40 NM, both extending to the approach ceiling. The simulator uses airport elevation as the AGL reference.

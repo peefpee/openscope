@@ -52,7 +52,21 @@ class SpawnScheduler {
      * @for SpawnScheduler
      * @method startScheduler
      */
+    setVfrEnabled(enabled) {
+        if (this.vfrTimer && GameController.game.timeouts.includes(this.vfrTimer)) GameController.destroyTimer(this.vfrTimer);
+        this.vfrEnabled = enabled;
+        this.vfrTimer = null;
+        if (!enabled) return;
+        const spawn = () => {
+            const arrival = SpawnPatternCollection.spawnPatternModels.find((pattern) => pattern.isArrival());
+            this._aircraftController.createVfrArrival(arrival);
+        };
+        spawn();
+        this.vfrTimer = GameController.game_interval(spawn, 300);
+    }
+
     startScheduler() {
+        this.setVfrEnabled(false);
         // TODO: rename to createSchedulesWithTimer
         this.createSchedulesFromList();
         // TODO: create getter on collection to get all preSpawn including departures

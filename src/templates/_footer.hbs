@@ -63,9 +63,21 @@
                 <img src="assets/images/icons/scope.png" />
             </a>
             <div class="control-item-content">
-                <a class="control toggle-labels">
-                    <img src="assets/images/icons/labels.png" />
-                    <span>Fixes & Runways</span>
+                <a href="#" role="button" aria-pressed="true" class="control toggle-labels active" data-layer="runways">
+                    <img src="assets/images/icons/labels.png" alt="" />
+                    <span>Runways</span>
+                </a>
+                <a href="#" role="button" aria-pressed="false" class="control toggle-labels" data-layer="procedure">
+                    <img src="assets/images/icons/labels.png" alt="" />
+                    <span>SID &amp; STAR fixes</span>
+                </a>
+                <a href="#" role="button" aria-pressed="false" class="control toggle-labels" data-layer="approach">
+                    <img src="assets/images/icons/labels.png" alt="" />
+                    <span>Approach fixes</span>
+                </a>
+                <a href="#" role="button" aria-pressed="false" class="control toggle-labels" data-layer="other">
+                    <img src="assets/images/icons/labels.png" alt="" />
+                    <span>Other fixes</span>
                 </a>
                 <a class="control toggle-sids">
                     <img src="assets/images/icons/sids.png" />
@@ -74,6 +86,10 @@
                 <a class="control toggle-stars">
                     <img src="assets/images/icons/stars.png" />
                     <span>STAR display</span>
+                </a>
+                <a href="#" role="button" aria-pressed="false" aria-controls="msa-panel" title="Show minimum sector altitudes" class="control toggle-msa">
+                    <img src="assets/images/icons/airspace.png" alt="" />
+                    <span>MSA sectors</span>
                 </a>
                 <a class="control toggle-airspace">
                     <img src="assets/images/icons/airspace.png" />
@@ -91,8 +107,11 @@
                     <img src="assets/images/icons/map.png" />
                     <span>Video Maps</span>
                 </a>
-                </a>
             </div>
+        </li>
+        <li class="control-item">
+            <button type="button" class="control-icon toggle-dat-import" title="Import airport data"
+                    aria-label="Import airport data" aria-haspopup="dialog" aria-controls="dat-import">+</button>
         </li>
         <li class="control-item">
             <a class="control-icon">

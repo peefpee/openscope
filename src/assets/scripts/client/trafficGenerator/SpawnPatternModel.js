@@ -1,3 +1,5 @@
+import sample from 'lodash/sample';
+import shuffle from 'lodash/shuffle';
 import _forEach from 'lodash/forEach';
 import _get from 'lodash/get';
 import _map from 'lodash/map';
@@ -215,6 +217,10 @@ export default class SpawnPatternModel extends BaseModel {
          * @default
          */
         this.routeString = '';
+        this.outboundRoutes = [];
+        this.vectors = false;
+        this._lastOutboundRoute = null;
+        this._remainingOutboundRoutes = [];
 
         /**
          * Object defining runway specific commands to send to an aircraft at spawn time
@@ -478,6 +484,35 @@ export default class SpawnPatternModel extends BaseModel {
         return this._positionModel.relativePosition;
     }
 
+    nextRouteString() {
+        if (!this.vectors || this.outboundRoutes.length < 2) {
+            return sample(this.outboundRoutes) || this.routeString;
+        }
+
+        // Use every exit before repeating, including when the pool refills.
+        if (!this._remainingOutboundRoutes.length) {
+            this._remainingOutboundRoutes = shuffle(this.outboundRoutes);
+            if (this._remainingOutboundRoutes[0] === this._lastOutboundRoute) {
+                this._remainingOutboundRoutes.push(this._remainingOutboundRoutes.shift());
+            }
+        }
+        const route = this._remainingOutboundRoutes.shift();
+        this._lastOutboundRoute = route;
+        return route;
+    }
+
+    createVectorArrivalEntry() {
+        const [entry, inboundFix] = this._routeModel.waypoints;
+        const origin = this._generateSelfReferencedAirportPositionModel();
+        const radius = origin.distanceToPosition(entry.positionModel);
+        const positionModel = origin.generateDynamicPositionFromBearingAndDistance(Math.random() * tau(), radius);
+        return {
+            positionModel,
+            heading: positionModel.bearingToPosition(inboundFix.positionModel),
+            nextFix: inboundFix.name
+        };
+    }
+
     /**
      * Lifecycle method. Should be run only once on instantiation.
      *
@@ -504,6 +539,10 @@ export default class SpawnPatternModel extends BaseModel {
         this.destination = spawnPatternJson.destination;
         this.category = spawnPatternJson.category;
         this.routeString = spawnPatternJson.route;
+        this.outboundRoutes = this.isDeparture() ? spawnPatternJson.outboundRoutes || [] : [];
+        this.vectors = spawnPatternJson.vectors === true;
+        this._lastOutboundRoute = null;
+        this._remainingOutboundRoutes = [];
         this.commands = spawnPatternJson.commands;
         this.speed = this._extractSpeedFromJson(spawnPatternJson);
         this.method = spawnPatternJson.method;
@@ -540,6 +579,10 @@ export default class SpawnPatternModel extends BaseModel {
         this.origin = '';
         this.destination = '';
         this.routeString = '';
+        this.outboundRoutes = [];
+        this.vectors = false;
+        this._lastOutboundRoute = null;
+        this._remainingOutboundRoutes = [];
         this.commands = {};
         this._minimumAltitude = INVALID_NUMBER;
         this._maximumAltitude = INVALID_NUMBER;
@@ -1071,6 +1114,9 @@ export default class SpawnPatternModel extends BaseModel {
             AirportController.current
         );
 
+        if (this.vectors && this.isArrival()) {
+            return preSpawnArrivalAircraftList.map((aircraft) => ({ ...aircraft, ...this.createVectorArrivalEntry() }));
+        }
         return preSpawnArrivalAircraftList;
     }
 

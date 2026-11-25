@@ -37,3 +37,21 @@ ava('.getFixSpokenName() returns input in lowercase if fix does not exist', (t) 
 
     t.deepEqual(result, 'asdfg');
 });
+
+ava.serial('speaks Australian coded approach fixes with the airport name and phonetic suffix', (t) => {
+    const airport = { ...AIRPORT_JSON_KLAS_MOCK, icao: 'YMHB', spokenAirportName: 'Hobart',
+        fixGroups: { approach: ['HB2EF', 'HB410', 'KANLI'] } };
+    NavigationLibrary.reset();
+    try {
+        NavigationLibrary.init(airport);
+        t.is(NavigationLibrary.getFixSpokenName('hb2ef'), 'Hobart two echo foxtrot');
+        t.is(NavigationLibrary.getFixSpokenName('HB410'), 'Hobart four one zero');
+        t.is(NavigationLibrary.getFixSpokenName('KANLI'), 'kanli');
+        t.is(NavigationLibrary.getFixSpokenName('Z'), 'zulu');
+        NavigationLibrary.reset();
+        NavigationLibrary.init({ ...airport, icao: 'NZAA' });
+        t.is(NavigationLibrary.getFixSpokenName('HB2EF'), 'hb2ef');
+    } finally {
+        NavigationLibrary.reset();
+    }
+});

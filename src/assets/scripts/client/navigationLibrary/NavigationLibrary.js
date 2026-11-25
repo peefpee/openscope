@@ -1,3 +1,4 @@
+import { radio_spellOut } from '../utilities/radioUtilities';
 import _filter from 'lodash/filter';
 import _flatten from 'lodash/flatten';
 import _forEach from 'lodash/forEach';
@@ -64,6 +65,10 @@ class NavigationLibrary {
          * @default {}
          */
         this._procedureCollection = {};
+        this._procedureFixes = new Set();
+        this._approachFixes = new Set();
+        this._airportIcao = '';
+        this._spokenAirportName = '';
 
         /**
          *
@@ -149,9 +154,22 @@ class NavigationLibrary {
         this._initializeAirwayCollection(airways);
         this._initializeHoldCollection(holds);
         this._initializeProcedureCollection(sids, stars);
+        const groups = airportJson.fixGroups || {};
+        const procedureFixes = Object.values(this._procedureCollection).map((procedure) => procedure.getAllFixNamesInUse());
+        const names = groups.procedure || _flatten(procedureFixes);
+        this._procedureFixes = new Set(names.filter(Boolean).map((fix) => fix.toUpperCase()));
+        this._approachFixes = new Set((groups.approach || []).map((name) => name.toUpperCase()));
+        this._airportIcao = (airportJson.icao || '').toUpperCase();
+        this._spokenAirportName = airportJson.spokenAirportName || (!airportJson.isDatImport && airportJson.name);
         this._initializeSidLines();
         this._initializeStarLines();
         this._showConsoleWarningForUndefinedFixes();
+    }
+
+    isFixVisible(name, layers) {
+        const procedure = this._procedureFixes.has(name);
+        const approach = this._approachFixes.has(name);
+        return (procedure && layers.procedure) || (approach && layers.approach) || (!procedure && !approach && layers.other);
     }
 
     /**
@@ -326,6 +344,10 @@ class NavigationLibrary {
 
         this._airwayCollection = {};
         this._procedureCollection = {};
+        this._procedureFixes = new Set();
+        this._approachFixes = new Set();
+        this._airportIcao = '';
+        this._spokenAirportName = '';
         this._referencePosition = null;
         this._procedureLines = {};
     }
@@ -505,7 +527,13 @@ class NavigationLibrary {
      * @param fixName {string}
      * @return {string}
      */
-    getFixSpokenName(fixName) {
+    getFixSpokenName(fixName, approachEntry = false) {
+        const id = fixName.toUpperCase();
+        if (/^[A-Z]$/.test(id)) return radio_spellOut(id);
+        if (this._airportIcao.startsWith('Y') && (approachEntry || this._approachFixes.has(id)) && /^[A-Z]{2}\d[A-Z0-9]{2}$/.test(id)) {
+            const airport = this._spokenAirportName || radio_spellOut(id.slice(0, 2));
+            return `${airport} ${radio_spellOut(id.slice(2))}`;
+        }
         return FixCollection.getFixSpokenName(fixName);
     }
 

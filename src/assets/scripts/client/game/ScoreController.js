@@ -106,7 +106,7 @@ export default class ScoreController {
             return;
         }
 
-        if (aircraftModel.mcp.headingMode !== MCP_MODE.HEADING.LNAV) {
+        if (aircraftModel.isDeparture() ? !aircraftModel.transferredToCentre : aircraftModel.mcp.headingMode !== MCP_MODE.HEADING.LNAV) {
             this._onAirspaceExitWithoutClearance(aircraftModel);
 
             return;
@@ -135,7 +135,9 @@ export default class ScoreController {
      * @private
      */
     _onAirspaceExitWithClearance(aircraftModel) {
-        aircraftModel.radioCall('switching to center, good day', AIRPORT_CONTROL_POSITION_NAME.DEPARTURE);
+        const outbound = aircraftModel.fms.outboundWaypoint;
+        const message = outbound ? `tracking ${outbound.name}, switching to Centre, good day` : 'switching to center, good day';
+        aircraftModel.radioCall(message, AIRPORT_CONTROL_POSITION_NAME.DEPARTURE);
         GameController.events_recordNew(GAME_EVENTS.DEPARTURE);
     }
 

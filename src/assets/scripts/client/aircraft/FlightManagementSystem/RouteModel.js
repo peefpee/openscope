@@ -185,6 +185,18 @@ export default class RouteModel extends BaseModel {
 
     // ------------------------------ PUBLIC ------------------------------
 
+    setDepartureOutbound(fixName, retainDeparture) {
+        const outboundLeg = new LegModel(fixName);
+        // On the ground, keep the SID (or the initial vector departure fix).
+        // Once airborne the clearance is direct from the current position.
+        const first = this.currentLeg;
+        const retained = retainDeparture ? [first] : [];
+        if (!retained.length || _last(first.waypoints).name !== fixName) {
+            retained.push(outboundLeg);
+        }
+        this._legCollection = retained;
+    }
+
     /**
      * Merge the provided route model into this route model, if possible
      *

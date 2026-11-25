@@ -4,6 +4,8 @@ import AirportController from '../airport/AirportController';
 import EventBus from '../lib/EventBus';
 import EventTracker from '../EventTracker';
 import GameController from '../game/GameController';
+import MsaView from './MsaView';
+import DatImportView from './DatImportView';
 import SettingsController from './SettingsController';
 import TrafficRateController from './TrafficRateController';
 import VideoMapController from './VideoMapController';
@@ -419,7 +421,7 @@ class UiController {
         this.$toggleAirportGuide.on('click', (event) => this.onToggleAirportGuide(event));
         this.$toggleAirspace.on('click', (event) => this.onToggleAirspace(event));
         this.$toggleChangelog.on('click', (event) => this.onToggleChangelog(event));
-        this.$toggleLabels.on('click', (event) => this.onToggleLabels(event));
+        this.$toggleLabels.on('click.radarLayers', (event) => this.onToggleLabels(event));
         this.$toggleOptions.on('click', (event) => this.onToggleOptions(event));
         this.$togglePause.on('click', (event) => GameController.game_pause_toggle(event));
         this.$toggleRestrictedAreas.on('click', (event) => this.onToggleRestrictedAreas(event));
@@ -431,7 +433,38 @@ class UiController {
         this.$toggleTutorial.on('click', (event) => this.onToggleTutorial(event));
         this.$toggleVideoMap.on('click', (event) => this.onToggleVideoMap(event));
 
+        this._setupControlMenus();
+        this.msaView = new MsaView(this.$element);
+        this.datImportView = new DatImportView(this.$element, () => this.msaView.refresh());
+
         return this;
+    }
+
+    /**
+     * Keep a control-bar dropdown visible while the pointer is over its icon
+     * or the menu itself. A short grace period on leave prevents the menu from
+     * flashing away when the pointer briefly crosses a boundary.
+     *
+     * @for UiController
+     * @method _setupControlMenus
+     * @private
+     */
+    _setupControlMenus() {
+        const $menuItems = this.$element
+            .find('.control-item')
+            .filter((index, element) => element.querySelector('.control-item-content') !== null);
+
+        $menuItems.on('mouseenter', (event) => {
+            clearTimeout(this._controlMenuCloseTimeout);
+            $(event.currentTarget).addClass('is-open');
+        });
+
+        $menuItems.on('mouseleave', (event) => {
+            const $item = $(event.currentTarget);
+
+            clearTimeout(this._controlMenuCloseTimeout);
+            this._controlMenuCloseTimeout = setTimeout(() => $item.removeClass('is-open'), 150);
+        });
     }
 
     /**
@@ -452,7 +485,7 @@ class UiController {
         this.$toggleAirportGuide.off('click', (event) => this.onToggleAirportGuide(event));
         this.$toggleAirspace.off('click', (event) => this.onToggleAirspace(event));
         this.$toggleChangelog.off('click', (event) => this.onToggleChangelog(event));
-        this.$toggleLabels.off('click', (event) => this.onToggleLabels(event));
+        this.$toggleLabels.off('.radarLayers');
         this.$toggleOptions.off('click', (event) => this.onToggleOptions(event));
         this.$togglePause.off('click', (event) => GameController.game_pause_toggle(event));
         this.$toggleRestrictedAreas.off('click', (event) => this.onToggleRestrictedAreas(event));
@@ -463,6 +496,15 @@ class UiController {
         this.$toggleTraffic.off('click', (event) => this.onToggleTraffic(event));
         this.$toggleTutorial.off('click', (event) => this.onToggleTutorial(event));
         this.$toggleVideoMap.off('click', (event) => this.onToggleVideoMap(event));
+
+        this.datImportView.destroy();
+        this.msaView.destroy();
+        clearTimeout(this._controlMenuCloseTimeout);
+        this.$element
+            .find('.control-item')
+            .filter((index, element) => element.querySelector('.control-item-content') !== null)
+            .off('mouseenter mouseleave')
+            .removeClass('is-open');
 
         return this();
     }
@@ -559,6 +601,7 @@ class UiController {
      */
     onAirportChange() {
         this.$log.empty();
+        this.msaView.refresh();
     }
 
     /**
@@ -655,7 +698,7 @@ class UiController {
      * @paam event {jquery event}
      */
     onClickAirportListItemHandler(event) {
-        if (event.data !== AirportController.airport_get().icao) {
+        if (AirportController.airports[event.data] !== AirportController.current) {
             AirportController.airport_set(event.data);
             this._onClickCloseAirportDialog();
         }
@@ -684,7 +727,7 @@ class UiController {
 
             // TODO: replace with an onClick() handler
             $airportListItem.click(icao.toLowerCase(), (event) => {
-                if (event.data !== AirportController.airport_get().icao) {
+                if (AirportController.airports[event.data] !== AirportController.current) {
                     AirportController.airport_set(event.data);
 
                     this._onClickCloseAirportDialog();
@@ -768,7 +811,9 @@ class UiController {
         }
 
         const icao = AirportController.airport_get().icao.toLowerCase();
-        this.$airportDialogBody.find(`li[data-icao="${icao}"]`).addClass(SELECTORS.CLASSNAMES.AIRPORT_LIST_ITEM_IS_ACTIVE);
+        if (!AirportController.current.data.isDatImport) {
+            this.$airportDialogBody.find(`li[data-icao="${icao}"]`).addClass(SELECTORS.CLASSNAMES.AIRPORT_LIST_ITEM_IS_ACTIVE);
+        }
 
         this.$switchAirport.addClass(SELECTORS.CLASSNAMES.ACTIVE);
     }
@@ -860,13 +905,13 @@ class UiController {
      * @param {jquery event}
      */
     onToggleLabels(event) {
-        this.$toggleLabels.toggleClass(SELECTORS.CLASSNAMES.ACTIVE);
-        EventTracker.recordEvent(
-            TRACKABLE_EVENT.OPTIONS,
-            'fix-runway-labels',
-            `${this.$toggleLabels.hasClass(SELECTORS.CLASSNAMES.ACTIVE)}`
-        );
-        this._eventBus.trigger(EVENT.TOGGLE_LABELS);
+        event.preventDefault();
+        const button = $(event.currentTarget);
+        const layer = button.data('layer');
+        const visible = !button.hasClass(SELECTORS.CLASSNAMES.ACTIVE);
+        button.toggleClass(SELECTORS.CLASSNAMES.ACTIVE, visible).attr('aria-pressed', String(visible));
+        EventTracker.recordEvent(TRACKABLE_EVENT.OPTIONS, layer, String(visible));
+        this._eventBus.trigger(EVENT.TOGGLE_LABELS, layer, visible);
     }
 
     /**

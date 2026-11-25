@@ -1,3 +1,4 @@
+import { orbitTrack } from './Pilot/VfrArrival';
 import _ceil from 'lodash/ceil';
 import _defaultTo from 'lodash/defaultTo';
 import _findIndex from 'lodash/findIndex';
@@ -64,6 +65,7 @@ import {
 } from './ModeControl/modeControlConstants';
 import {
     FLIGHT_CATEGORY,
+    FLIGHT_RULES,
     FLIGHT_PHASE,
     PERFORMANCE,
     ENGINE_TYPE
@@ -77,16 +79,6 @@ import {
     TIME
 } from '../constants/globalConstants';
 import { ENVIRONMENT } from '../constants/environmentConstants';
-
-/**
- * @property FLIGHT_RULES
- * @type {Object}
- * @final
- */
-const FLIGHT_RULES = {
-    VFR: 'vfr',
-    IFR: 'ifr'
-};
 
 /**
  * Each simulated aircraft in the game. Contains a model, fms, and conflicts.
@@ -381,7 +373,8 @@ export default class AircraftModel {
          * @type {FLIGHT_RULES}
          * @default FLIGHT_RULES.IFR
          */
-        this.rules = FLIGHT_RULES.IFR;
+        this.rules = options.rules || FLIGHT_RULES.IFR;
+        this.vfrOrbit = options.orbit || null;
 
         /**
          * Flag for if an aircraft is within controlled airspace, thus
@@ -440,6 +433,7 @@ export default class AircraftModel {
          * @default false
          */
         this.isRemovable = false;
+        this.transferredToCentre = false;
 
         // Set to true when simulating future movements of the aircraft
         // Should be checked before updating global state such as score
@@ -447,6 +441,7 @@ export default class AircraftModel {
         this.projected = false;
         this.relativePositionHistory = [];
 
+        this.isVectorDeparture = options.vectors === true && options.category === FLIGHT_CATEGORY.DEPARTURE;
         this.category = options.category; // 'arrival' or 'departure'
 
         // target represents what the pilot makes of the tower's commands. It is
@@ -588,6 +583,10 @@ export default class AircraftModel {
         return `${this.airlineId.toUpperCase()}${this.flightNumber.toUpperCase()}`;
     }
 
+    get readbackCallsign() {
+        return this.airlineId.toLowerCase() === 'vh' ? this.flightNumber.toUpperCase() : this.callsign;
+    }
+
     /**
      * Current flight phase
      *
@@ -671,7 +670,7 @@ export default class AircraftModel {
         this.target.speed = this.speed;
 
         // This assumes and arrival spawns outside the airspace
-        this.isControllable = data.category === FLIGHT_CATEGORY.DEPARTURE;
+        this.isControllable = data.category === FLIGHT_CATEGORY.DEPARTURE || this.rules === FLIGHT_RULES.VFR;
     }
 
     /**
@@ -699,6 +698,10 @@ export default class AircraftModel {
             flightPlanAltitude = this.fms.flightPlanAltitude * UNIT_CONVERSION_CONSTANTS.FT_FL;
         }
 
+        const flightPlan = this.fms.getFullRouteStringWithoutAirportsWithSpaces();
+        const routeLabel = flightPlan.startsWith('_SIMOUT ') ? 'Departure vectors' :
+            _get(AirportController.current, ['data', 'routeLabels', flightPlan], flightPlan);
+        const outbound = this.fms.outboundWaypoint;
         return {
             id: this.id,
             insideCenter: this.isControllable,
@@ -709,7 +712,7 @@ export default class AircraftModel {
             flightPlanAltitude,
             arrivalAirportId: this.destination.toUpperCase(),
             departureAirportId: this.origin.toUpperCase(),
-            flightPlan: this.fms.getFullRouteStringWithoutAirportsWithSpaces()
+            flightPlan: this.rules === FLIGHT_RULES.VFR ? (this.vfrOrbit ? 'VFR · OCTA' : 'VFR · visual arrival') : outbound ? `${routeLabel} · OUT ${outbound.name}` : routeLabel
         };
     }
 
@@ -751,6 +754,10 @@ export default class AircraftModel {
 
         if (!_isEmpty(weight)) {
             weight = ` ${weight}`;
+        }
+
+        if (this.airlineId.toLowerCase() === 'vh') {
+            return radio_spellOut(this.flightNumber.toLowerCase());
         }
 
         if (this.airlineCallsign === 'November') {
@@ -829,6 +836,7 @@ export default class AircraftModel {
         }
 
         this.pilot.hasApproachClearance = false;
+        this.pilot.approachGuidance = null;
 
         this.mcp.setAltitudeFieldValue(nextAltitudeToMaintain);
         this.mcp.setAltitudeHold();
@@ -1175,7 +1183,7 @@ export default class AircraftModel {
             return;
         }
 
-        const writtenCallsign = this.callsign;
+        const writtenCallsign = this.readbackCallsign;
         const spokenCallsign = this.getRadioCallsign();
 
         // let call = '';
@@ -1230,7 +1238,7 @@ export default class AircraftModel {
                 alt_say = `at ${radio_altitude(alt)}`;
             }
 
-            UiController.ui_log(`${AirportController.airport_get().radio.app}, ${this.callsign} with you ${alt_log}`);
+            UiController.ui_log(`${AirportController.airport_get().radio.app}, ${this.readbackCallsign} with you ${alt_log}`);
             speech_say(
                 [
                     { type: 'text', content: `${AirportController.airport_get().radio.app}, ` },
@@ -1240,7 +1248,7 @@ export default class AircraftModel {
                 this.pilotVoice
             );
         } else {
-            UiController.ui_log(`${AirportController.airport_get().radio.twr}, ${this.callsign}, ready to taxi`);
+            UiController.ui_log(`${AirportController.airport_get().radio.twr}, ${this.readbackCallsign}, ready to taxi`);
             speech_say(
                 [
                     { type: 'text', content: AirportController.airport_get().radio.twr },
@@ -1348,7 +1356,12 @@ export default class AircraftModel {
         }
 
         if (this.mcp.headingMode === MCP_MODE.HEADING.OFF) {
-            this.mcp.setHeadingLnav();
+            if (this.isVectorDeparture && !this.fms.getSidIcao()) {
+                this.mcp.setHeadingFieldValue(heading);
+                this.mcp.setHeadingHold();
+            } else {
+                this.mcp.setHeadingLnav();
+            }
         }
 
         if (this.mcp.speed === INVALID_NUMBER) {
@@ -1367,6 +1380,29 @@ export default class AircraftModel {
      * @method updateTarget
      */
     updateTarget() {
+        if (this.vfrOrbit) {
+            const reportingPoint = this.vfrOrbit.reportingPoint;
+            if (reportingPoint && this.positionModel.distanceToPosition(reportingPoint.position) < 0.35 && !this.projected) {
+                this.radioCall(`over ${reportingPoint.name}, ${Math.round(this.altitude)} feet, remaining OCTA`, 'app');
+                this.vfrOrbit.reportingPoint = null;
+            }
+            this.targetGroundTrack = this.vfrOrbit.reportingPoint ?
+                this.positionModel.bearingToPosition(this.vfrOrbit.reportingPoint.position) : orbitTrack(this.vfrOrbit, this.positionModel);
+            this.target.altitude = this.vfrOrbit.altitude;
+            this.target.speed = this.model.speed.cruise;
+            return;
+        }
+        const guidance = this.pilot.approachGuidance;
+        if (guidance && this.flightPhase !== FLIGHT_PHASE.LANDING) {
+            const target = guidance.targets(this);
+            this.targetGroundTrack = target.track;
+            this.target.altitude = target.altitude;
+            const speed = this.mcp.speedMode === MCP_MODE.SPEED.HOLD ? this.mcp.speed : this.speed;
+            this.target.speed = Math.max(this.model.speed.landing, Math.min(speed, target.speed || 210));
+            this.overrideTarget();
+            return;
+        }
+
         this.target.altitude = _defaultTo(this._calculateTargetedAltitude(), this.target.altitude);
 
         this._updateTargetedDirectionality();
@@ -1551,7 +1587,8 @@ export default class AircraftModel {
                 break;
 
             case FLIGHT_PHASE.DESCENT:
-                if (this.pilot.hasApproachClearance && this.isEstablishedOnCourse()) {
+                if (this.pilot.hasApproachClearance && (!this.pilot.approachGuidance || this.pilot.approachGuidance.onFinal) &&
+                    this.isEstablishedOnCourse()) {
                     this.setFlightPhase(FLIGHT_PHASE.APPROACH);
 
                     if (!this.projected) {
@@ -1917,6 +1954,9 @@ export default class AircraftModel {
         }
 
         if (shouldMoveToNextFix) {
+            if (this.isTrackingOutbound() && this.isControllable && !this.projected) {
+                this.transferToCentre();
+            }
             if (!this.fms.hasNextWaypoint()) {
                 // we've hit this block because and aircraft is about to fly over the last waypoint in its flightPlan
                 this.pilot.maintainPresentHeading(this);
@@ -2531,8 +2571,15 @@ export default class AircraftModel {
 
         // Calculate new position
         const hoursElapsed = TimeKeeper.getDeltaTimeForGameStateAndTimewarp() * TIME.ONE_SECOND_IN_HOURS;
-        const distanceTraveled_nm = groundSpeed * hoursElapsed;
+        let distanceTraveled_nm = groundSpeed * hoursElapsed;
 
+        if (this.vfrOrbit) {
+            const candidate = this.positionModel.generateDynamicPositionFromBearingAndDistance(groundTrack, distanceTraveled_nm);
+            if (this.vfrOrbit.center.distanceToPosition(candidate) > 1.45) {
+                groundTrack = this.positionModel.bearingToPosition(this.vfrOrbit.center);
+                distanceTraveled_nm = Math.min(distanceTraveled_nm, this.positionModel.distanceToPosition(this.vfrOrbit.center));
+            }
+        }
         this.positionModel.setCoordinatesByBearingAndDistance(groundTrack, distanceTraveled_nm);
 
         this.groundTrack = groundTrack;
@@ -2753,13 +2800,34 @@ export default class AircraftModel {
         EventBus.trigger(AIRCRAFT_EVENT.AIRSPACE_EXIT, this);
     }
 
+    isTrackingOutbound() {
+        const fix = this.fms.outboundWaypoint;
+        if (!fix || this.fms.currentWaypoint !== fix || fix.isHoldWaypoint ||
+            this.mcp.headingMode !== MCP_MODE.HEADING.LNAV || !this.isAirborne()) return false;
+
+        const bearing = this.positionModel.bearingToPosition(fix.positionModel);
+        return Math.abs(angle_offset(this.groundTrack, bearing)) <= degreesToRadians(15) ||
+            this.positionModel.distanceToPosition(fix.positionModel) < PERFORMANCE.MAXIMUM_DISTANCE_TO_PASS_WAYPOINT_NM;
+    }
+
+    transferToCentre() {
+        if (this.projected || !this.isControllable || this.transferredToCentre || !this.isTrackingOutbound()) {
+            return false;
+        }
+        this.transferredToCentre = true;
+        this.isControllable = false;
+        this.setIsRemovable();
+        EventBus.trigger(AIRCRAFT_EVENT.AIRSPACE_EXIT, this);
+        return true;
+    }
+
     /**
      * @for AircraftModel
      * @method _updateAircraftControllability
      * @private
      */
     _updateAircraftControllability() {
-        if (this.projected) {
+        if (this.projected || this.transferredToCentre || this.rules === FLIGHT_RULES.VFR) {
             return;
         }
 
@@ -2769,6 +2837,7 @@ export default class AircraftModel {
             return;
         }
 
+        if (!isInsideAirspace && this.transferToCentre()) return;
         this.isControllable = isInsideAirspace;
         this._contactAircraftAfterControllabilityChange();
     }

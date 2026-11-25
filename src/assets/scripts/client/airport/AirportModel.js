@@ -6,6 +6,8 @@ import _forEach from 'lodash/forEach';
 import _get from 'lodash/get';
 import _map from 'lodash/map';
 import AirportController from './AirportController';
+import { australianShelves } from './dat/australianAirspace';
+import navData from './dat/NavDataCache';
 import AirspaceModel from './AirspaceModel';
 import DynamicPositionModel from '../base/DynamicPositionModel';
 import EventBus from '../lib/EventBus';
@@ -380,11 +382,21 @@ export default class AirportModel {
         this._initRangeRings(data.rangeRings);
         this.loadTerrain();
         this.buildAirspace(data.airspace);
+        if (/^Y/i.test(this.icao)) {
+            this._australianData = data;
+            this._controlledShelves = null;
+            navData.load();
+        }
         this.setActiveRunwaysFromNames(data.arrivalRunway, data.departureRunway);
         this.buildRestrictedAreas(data.restricted);
         this.updateCurrentWind(data.wind);
 
-        this.eventBus.on(EVENT.WIND_CHANGE, this.updateCurrentWind.bind(this));
+        this._onWindChange = this.updateCurrentWind.bind(this);
+        this.eventBus.on(EVENT.WIND_CHANGE, this._onWindChange);
+    }
+
+    releaseWindListener() {
+        this.eventBus.off(EVENT.WIND_CHANGE, this._onWindChange);
     }
 
     /**
@@ -546,7 +558,9 @@ export default class AirportModel {
             return;
         }
 
-        localStorage[STORAGE_KEY.ATC_LAST_AIRPORT] = this.icao;
+        if (!this.data.isDatImport) {
+            localStorage[STORAGE_KEY.ATC_LAST_AIRPORT] = this.icao;
+        }
 
         // TODO: this should live elsewhere and be called by a higher level controller
         GameController.game_reset_score_and_events();
@@ -910,9 +924,20 @@ export default class AirportModel {
      * @param altitude {number}
      * @return {boolean}
      */
+    get controlledShelves() {
+        if (!this._australianData) return this.airspace || [];
+        const record = navData.records.get('au-airspace');
+        if (!this._controlledShelves || record !== this._airspaceRecord) {
+            this._controlledShelves = australianShelves(this, this._australianData);
+            this._airspaceRecord = record;
+        }
+        return this._controlledShelves;
+    }
+
     isPointWithinAirspace(point, altitude) {
-        for (let i = 0; i < this.airspace.length; i++) {
-            const airspace = this.airspace[i];
+        const shelves = this.controlledShelves;
+        for (let i = 0; i < shelves.length; i++) {
+            const airspace = shelves[i];
 
             if (airspace.isPointInside(point, altitude)) {
                 return true;

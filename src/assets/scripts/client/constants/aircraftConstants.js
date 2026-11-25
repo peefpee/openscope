@@ -1,4 +1,14 @@
 /**
+ * @property FLIGHT_RULES
+ * @type {Object}
+ * @final
+ */
+export const FLIGHT_RULES = {
+    VFR: 'vfr',
+    IFR: 'ifr'
+};
+
+/**
  * @property FLIGHT_CATEGORY
  * @type {Object}
  * @final

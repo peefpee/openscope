@@ -253,7 +253,36 @@ ava('aliases, optionalAltitudeParser and optionalAltitudeValidator used by climb
     test_aliases(t, AIRCRAFT_COMMAND_MAP, 'climbViaSid', ['climbViaSid', 'cvs']);
 });
 
-ava('make sure we test all 32 aircraft commands', t => {
+ava('rnav requires an entry and runway, and vis requires only a runway', t => {
+    const rnav = new AircraftCommandModel('rnav')._commandDefinition;
+    const vis = new AircraftCommandModel('vis')._commandDefinition;
+    self_alias(t, AIRCRAFT_COMMAND_MAP, 'rnav');
+    self_alias(t, AIRCRAFT_COMMAND_MAP, 'vis');
+    t.truthy(rnav.validate(['BUSKA']));
+    t.truthy(rnav.validate(['BUSKA', '12', '30']));
+    t.is(rnav.validate(['BUSKA', '12']), undefined);
+    t.deepEqual(rnav.parse(['BUSKA', '12']), ['BUSKA', '12']);
+    t.truthy(vis.validate([]));
+    t.truthy(vis.validate(['12', '30']));
+    t.is(vis.validate(['30']), undefined);
+});
+
+ava('outbound takes one fix and centre takes no arguments', t => {
+    const outbound = new AircraftCommandModel('outbound')._commandDefinition;
+    const centre = new AircraftCommandModel('centre')._commandDefinition;
+    self_alias(t, AIRCRAFT_COMMAND_MAP, 'outbound');
+    test_aliases(t, AIRCRAFT_COMMAND_MAP, 'centre', ['centre', 'center']);
+    t.truthy(outbound.validate([]));
+    t.is(outbound.validate(['KANLI']), undefined);
+    t.is(centre.validate([]), undefined);
+    t.truthy(centre.validate(['KANLI']));
+});
+
+ava('Australian VFR commands have the expected aliases', t => {
+    for (const name of ['octa', 'dw', 'xw', 'base', 'final']) self_alias(t, AIRCRAFT_COMMAND_MAP, name);
+});
+
+ava('make sure we test all 41 aircraft commands', t => {
     t.true(Object.values(AIRCRAFT_COMMAND_MAP)
-        .filter(val => !val.isSystemCommand).length === 32);
+        .filter(val => !val.isSystemCommand).length === 41);
 });

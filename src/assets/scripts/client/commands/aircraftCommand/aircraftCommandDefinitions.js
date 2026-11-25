@@ -85,6 +85,7 @@ const ZERO_ARG_AIRCRAFT_COMMANDS = {
     },
 
     // Aircraft commands
+    centre: { validate: zeroArgumentsValidator, parse: noop },
     abort: {
         validate: zeroArgumentsValidator,
         parse: noop
@@ -149,6 +150,7 @@ const SINGLE_ARG_AIRCRAFT_COMMANDS = {
         validate: singleArgumentValidator,
         parse: noop
     },
+    outbound: { validate: singleArgumentValidator, parse: noop },
     direct: {
         validate: singleArgumentValidator,
         parse: noop
@@ -160,6 +162,10 @@ const SINGLE_ARG_AIRCRAFT_COMMANDS = {
     ils: {
         validate: singleArgumentValidator,
         parse: ilsParser
+    },
+    vis: {
+        validate: singleArgumentValidator,
+        parse: noop
     },
     land: {
         validate: zeroOrOneArgumentValidator,
@@ -224,6 +230,19 @@ const CUSTOM_ARG_AIRCRAFT_COMMANDS = {
     altitude: {
         validate: altitudeValidator,
         parse: altitudeParser
+    },
+    octa: { validate: zeroArgumentsValidator, parse: noop },
+    dw: {
+        validate: (args) => (args.length === 1 || (args.length === 2 && /^[lr]$/.test(args[1])) ?
+            undefined : 'expected dw [runway] [l/r]'),
+        parse: noop
+    },
+    xw: { validate: singleArgumentValidator, parse: noop },
+    base: { validate: singleArgumentValidator, parse: noop },
+    final: { validate: singleArgumentValidator, parse: noop },
+    rnav: {
+        validate: (args) => (args.length === 2 ? undefined : 'expected rnav [waypoint] [runway]'),
+        parse: noop
     },
     cross: {
         validate: crossingValidator,

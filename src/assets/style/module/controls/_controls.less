@@ -2,11 +2,14 @@
     list-style-type: none;
     margin: 0;
     padding: 0;
-    overflow: hidden;
+    // the dropdowns sit above the bar, so they must not be clipped here
+    overflow: visible;
     z-index: @controls-menu-z;
 }
 
 .control-item {
+    // anchor the dropdown to its own icon instead of the page body
+    position: relative;
     float: left;
     display: inline-block;
 }
@@ -22,8 +25,12 @@
     cursor: pointer;
 }
 
-.control-item:hover .control-item-content {
-    display: block;
+.control-item:hover .control-item-content,
+.control-item.is-open .control-item-content {
+    visibility: visible;
+    opacity: 1;
+    pointer-events: auto;
+    transition-delay: 0s;
 }
 
 .control-icon {
@@ -46,14 +53,28 @@
 }
 
 .control-item-content {
-    display: none;
     position: absolute;
+    left: 0;
+    // the icon's containing block is only 36px wide, so an unconstrained
+    // absolutely positioned menu would shrink-wrap and wrap every label;
+    // size it to its content instead
+    width: max-content;
+    max-width: ~"calc(100vw - 20px)";
+    // sit flush on top of the icon; the padding provides a hover bridge so
+    // moving the pointer from the icon to the menu never leaves the item
+    bottom: 100%;
+    padding-top: 4px;
+    visibility: hidden;
+    opacity: 0;
+    pointer-events: none;
     background-color: @dark;
     box-shadow: 0 8px 16px 0 rgba(0, 0, 0, 0.2);
-    bottom: @command-bar-height;
+    z-index: @controls-menu-z;
+    transition: opacity 0.1s ease, visibility 0s linear 0.1s;
 }
 
 .control-item-content.wide {
+    left: auto;
     right: 0;
     width: 450px;
 }
@@ -138,4 +159,72 @@
     width: auto;
     height: 20px;
     padding: 8px 8px;
+}
+
+.toggle-dat-import {
+    width: @command-bar-height;
+    height: @command-bar-height;
+    border: 0;
+    padding: 0;
+    background: transparent;
+    color: @medium-light-gray;
+    font: 26px/1 sans-serif;
+    cursor: pointer;
+}
+
+#dat-import {
+    box-sizing: border-box;
+    width: 540px;
+    max-width: 94vw;
+    max-height: 85vh;
+    margin: auto;
+    padding: 18px;
+    border: 2px solid @blue-medium;
+    border-radius: 6px;
+    background: @dark;
+    color: @light-gray;
+    font: inherit;
+    font-size: 13px;
+
+    &::backdrop { background: @black-07; }
+    header { display: flex; align-items: center; justify-content: space-between; }
+    h2 { margin: 0; font-size: 18px; }
+    label { display: block; margin: 14px 0 5px; }
+    small { color: @medium-light-gray; }
+    input { max-width: 100%; font: inherit; }
+    button { font: inherit; cursor: pointer; }
+    header button { background: transparent; border: 0; color: @light-gray; font-size: 22px; }
+    p { margin: 8px 0; line-height: 1.5; }
+    summary { cursor: pointer; padding: 5px 0; }
+    details details, details p { margin-left: 14px; }
+    ol { margin: 4px 0; padding-left: 36px; line-height: 1.6; }
+    .dat-results { max-height: 32vh; overflow-y: auto; }
+    .dat-results > details { border-top: 1px solid @dark-gray; }
+    footer { margin-top: 12px; }
+    .dat-open { padding: 6px 12px; background: @blue-medium; color: @light-gray; border: 1px solid @blue-light; }
+}
+
+#dat-import .dat-fix-source, #dat-import .dat-msa-source { display: block; margin-top: 4px; }
+
+#msa-panel {
+    position: absolute;
+    top: 100px;
+    left: 12px;
+    z-index: 3;
+    max-height: 65vh;
+    max-width: calc(100vw - 48px);
+    overflow: auto;
+    padding: 10px 14px;
+    background: @dark;
+    border: 1px solid @blue-medium;
+    color: @light-gray;
+    font-size: 13px;
+    header { display: flex; justify-content: space-between; align-items: center; }
+    header button { background: transparent; border: 0; color: inherit; font-size: 20px; cursor: pointer; }
+    select { font: inherit; }
+    p { margin: 8px 0 4px; }
+    canvas { width: 200px; height: 140px; position: static; }
+    ul { padding: 0; margin: 0; list-style: none; }
+    li { padding: 2px 0; }
+    [hidden] { display: none; }
 }

@@ -146,14 +146,7 @@ export default class CanvasController {
          */
         this._shouldDrawAirspace = false;
 
-        /**
-         * Flag used to determine if fix labels should be displayed
-         *
-         * @property _shouldDrawFixLabels
-         * @type {boolean}
-         * @default false
-         */
-        this._shouldDrawFixLabels = false;
+        this._radarLayers = { runways: true, procedure: false, approach: false, other: false };
 
         /**
          * Flag used to determine if restricted areas should be displayed
@@ -298,7 +291,7 @@ export default class CanvasController {
         this._eventBus.off(EVENT.ZOOM_VIEWPORT, this._onChangeViewportZoom);
         this._eventBus.off(EVENT.MARK_SHALLOW_RENDER, this._onMarkDirtyCanvas);
         this._eventBus.off(EVENT.TOGGLE_AIRSPACE, this._onToggleAirspaceHandler);
-        this._eventBus.off(EVENT.TOGGLE_LABELS, this._onToggleLabels);
+        this._eventBus.off(EVENT.TOGGLE_LABELS, this._onToggleLabelsHandler);
         this._eventBus.off(EVENT.TOGGLE_RESTRICTED_AREAS, this._onToggleRestrictedAreas);
         this._eventBus.off(EVENT.TOGGLE_SID_MAP, this._onToggleSidMap);
         this._eventBus.off(EVENT.TOGGLE_STAR_MAP, this._onToggleStarMap);
@@ -323,7 +316,7 @@ export default class CanvasController {
         this._shouldResize = true;
         this._shouldShallowRender = true;
         this._shouldDeepRender = true;
-        this._shouldDrawFixLabels = false;
+        this._radarLayers = { runways: true, procedure: false, approach: false, other: false };
         this._shouldDrawRestrictedAreas = false;
         this._shouldDrawSidMap = false;
         this._shouldDrawStarMap = false;
@@ -400,6 +393,12 @@ export default class CanvasController {
      * @method canvasUpdatePost
      */
     canvasUpdatePost() {
+        const airport = AirportController.current;
+        if (this._shouldDrawAirspace && airport && /^Y/i.test(airport.icao) &&
+            this._displayedShelves !== airport.controlledShelves) {
+            this._displayedShelves = airport.controlledShelves;
+            this._markDeepRender();
+        }
         if (!this._shouldShallowRender && !TimeKeeper.shouldUpdate()) {
             return;
         }
@@ -591,7 +590,7 @@ export default class CanvasController {
      * @private
      */
     _drawRunways(cc) {
-        if (!this._shouldDrawFixLabels) {
+        if (!this._radarLayers.runways) {
             return;
         }
 
@@ -631,7 +630,7 @@ export default class CanvasController {
      * @private
      */
     _drawRunwayLabels(cc) {
-        if (!this._shouldDrawFixLabels) {
+        if (!this._radarLayers.runways) {
             return;
         }
 
@@ -735,7 +734,7 @@ export default class CanvasController {
      * @private
      */
     _drawAirportFixesAndLabels(cc) {
-        if (!this._shouldDrawFixLabels) {
+        if (!(this._radarLayers.procedure || this._radarLayers.approach || this._radarLayers.other)) {
             return;
         }
 
@@ -745,10 +744,11 @@ export default class CanvasController {
         cc.lineJoin = 'round';
         cc.font = BASE_CANVAS_FONT;
 
-        for (let i = 0; i < NavigationLibrary.realFixes.length; i++) {
-            const fixModel = NavigationLibrary.realFixes[i];
+        for (const fixModel of NavigationLibrary.realFixes) {
 
-            this._drawSingleFixAndLabel(cc, fixModel);
+            if (NavigationLibrary.isFixVisible(fixModel.name, this._radarLayers)) {
+                this._drawSingleFixAndLabel(cc, fixModel);
+            }
         }
 
         cc.restore();
@@ -1928,8 +1928,9 @@ export default class CanvasController {
         cc.textAlign = 'center';
         cc.textBaseline = 'middle';
 
-        for (let i = 0; i < airport.airspace.length; i++) {
-            const airspace = airport.airspace[i];
+        const shelves = airport.controlledShelves;
+        for (let i = 0; i < shelves.length; i++) {
+            const airspace = shelves[i];
 
             cc.save(); // to allow reset of translation
             // required positioning to use _drawPoly
@@ -1939,7 +1940,8 @@ export default class CanvasController {
 
             const bottomFlightLevel = leftPad(Math.floor(airspace.floor / 100), 3);
             const topFlightLevel = leftPad(Math.ceil(airspace.ceiling / 100), 3);
-            const content = `${bottomFlightLevel}-${topFlightLevel} (#${i})`;
+            const classLabel = /^Y/i.test(airport.icao) ? `${airspace.airspace_class} ` : '';
+            const content = `${classLabel}${bottomFlightLevel}-${topFlightLevel} (#${i})`;
 
             cc.restore(); // reset from translation used for poly above
             cc.save();
@@ -2292,7 +2294,8 @@ export default class CanvasController {
 
         cc.beginPath();
 
-        const lines = airportModel.mapCollection.getVisibleMapLines();
+        const hideImportedRunways = airportModel.data.isDatImport && !this._radarLayers.runways;
+        const lines = airportModel.mapCollection.getVisibleMapLines(hideImportedRunways ? 'Runways' : null);
 
         lines.forEach((mapItem) => {
             const startRelativePos = [mapItem[0], mapItem[1]];
@@ -2565,7 +2568,7 @@ export default class CanvasController {
     }
 
     /**
-     * Toogle current value of `#draw_labels`
+     * Set the visibility of a runway or fix layer.
      *
      * This method will only be `trigger`ed by some other
      * class via the `EventBus`
@@ -2575,8 +2578,8 @@ export default class CanvasController {
      * @returns undefined
      * @private
      */
-    _onToggleLabels() {
-        this._shouldDrawFixLabels = !this._shouldDrawFixLabels;
+    _onToggleLabels(layer, visible) {
+        this._radarLayers[layer] = visible;
 
         this._markDeepRender();
     }

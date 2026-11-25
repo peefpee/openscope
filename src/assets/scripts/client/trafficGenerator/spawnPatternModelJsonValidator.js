@@ -16,6 +16,8 @@ const ACCEPTED_KEYS = [
 ];
 
 const ACCEPTED_OPTIONAL_KEYS = [
+    'outboundRoutes',
+    'vectors',
     'commands',
     'offset',
     'period',

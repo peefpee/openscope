@@ -129,6 +129,8 @@ export default class Fms {
          * @private
          */
         this._routeModel = null;
+        this.outboundWaypoint = null;
+        this._assignedOutboundFix = null;
 
         this.init(aircraftInitProps);
     }
@@ -155,6 +157,28 @@ export default class Fms {
      */
     get currentWaypoint() {
         return this._routeModel.currentWaypoint;
+    }
+
+    _refreshDepartureOutbound() {
+        if (!this.departureAirportModel) return;
+        const fixes = this.waypoints.filter((point) => point.positionModel && !point.isVectorWaypoint);
+        const assigned = _findLast(fixes, (point) => point.name === this._assignedOutboundFix);
+        if (assigned) {
+            this.outboundWaypoint = assigned;
+            return;
+        }
+        this._assignedOutboundFix = null;
+        const named = fixes.filter((point) => !point.name.startsWith('_'));
+        const candidates = named.length ? named : fixes;
+        const areas = this.departureAirportModel.airspace;
+        this.outboundWaypoint = candidates.find((point) => !areas.some((area) => area.isPointInside2D(point.relativePosition))) ||
+            candidates[candidates.length - 1] || null;
+    }
+
+    setDepartureOutbound(fixName, retainDeparture) {
+        this._routeModel.setDepartureOutbound(fixName, retainDeparture);
+        this._assignedOutboundFix = fixName;
+        this._refreshDepartureOutbound();
     }
 
     /**
@@ -293,6 +317,8 @@ export default class Fms {
         this.departureRunwayModel = null;
         this.flightPlanAltitude = INVALID_NUMBER;
         this._routeModel = null;
+        this.outboundWaypoint = null;
+        this._assignedOutboundFix = null;
 
         return this;
     }
@@ -509,7 +535,9 @@ export default class Fms {
             return [false, `requested route of "${routeString.toUpperCase()}" is invalid`];
         }
 
-        return this._routeModel.absorbRouteModel(nextRouteModel);
+        const result = this._routeModel.absorbRouteModel(nextRouteModel);
+        if (result[0]) this._refreshDepartureOutbound();
+        return result;
     }
 
     /**
@@ -958,6 +986,7 @@ export default class Fms {
 
         if (readback[0]) {
             this._updateDepartureRunwayFromRoute();
+            this._refreshDepartureOutbound();
         }
 
         return readback;
@@ -1040,6 +1069,7 @@ export default class Fms {
         this.departureRunwayModel = runwayModel;
 
         this._routeModel.updateSidLegForDepartureRunwayModel(runwayModel);
+        this._refreshDepartureOutbound();
     }
 
     /**
@@ -1068,7 +1098,9 @@ export default class Fms {
      * @param waypointName {string}
      */
     skipToWaypointName(waypointName) {
-        return this._routeModel.skipToWaypointName(waypointName);
+        const result = this._routeModel.skipToWaypointName(waypointName);
+        this._refreshDepartureOutbound();
+        return result;
     }
 
     // ------------------------------ PRIVATE ------------------------------

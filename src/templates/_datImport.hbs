@@ -1,0 +1,31 @@
+<dialog id="dat-import" aria-labelledby="dat-import-title">
+    <header>
+        <h2 id="dat-import-title">Import airport data</h2>
+        <form method="dialog"><button type="submit" aria-label="Close import dialog">&times;</button></form>
+    </header>
+    <div class="dat-cached" hidden>
+        <label for="dat-cached-airport">Saved airport</label>
+        <select id="dat-cached-airport"></select>
+    </div>
+    <label for="dat-airport-file">Airport file <small>X-Plane CIFP · ICAO.dat</small></label>
+    <input id="dat-airport-file" type="file" accept=".dat">
+    <label for="dat-waypoint-file">Waypoint coordinates <small>Optional · earth_fix.dat</small></label>
+    <input id="dat-waypoint-file" type="file" accept=".dat">
+    <small class="dat-fix-source"></small>
+    <label for="dat-msa-file">Minimum sector altitudes <small>Optional · earth_msa.dat</small></label>
+    <input id="dat-msa-file" type="file" accept=".dat">
+    <small class="dat-msa-source"></small>
+    <label for="dat-airspace-file">Australian controlled airspace <small>Optional · airspaces/airspace.txt</small></label>
+    <input id="dat-airspace-file" type="file" accept=".txt"><small class="dat-airspace-source"></small>
+    <p class="dat-cache-status" role="status"></p>
+    <p class="dat-status" role="status" aria-live="polite"></p>
+    <div class="dat-results nice-scrollbar"></div>
+    <footer hidden>
+        <div class="dat-spoken-name" hidden>
+            <label for="dat-spoken-name">Airport name for radio calls</label>
+            <input id="dat-spoken-name" type="text" maxlength="80" placeholder="e.g. Hobart">
+        </div>
+        <p>Opening this scope starts a new session with simulated arrivals and departures in a 40 NM practice sector. Use the SID and STAR radar controls to display flyable procedures.</p>
+        <button type="button" class="dat-open">Open imported scope</button>
+    </footer>
+</dialog>

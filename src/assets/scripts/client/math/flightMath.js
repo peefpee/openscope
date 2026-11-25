@@ -100,7 +100,7 @@ export function bearingToPoint(startPosition, endPosition) {
  *                                              [2] is the hypotenuse (straight-line distance), in km
  */
 export function getOffset(aircraft, target, headingThruTarget = null) {
-    if (!headingThruTarget) {
+    if (headingThruTarget === null) {
         headingThruTarget = aircraft.heading;
     }
 
