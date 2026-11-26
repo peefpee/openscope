@@ -436,6 +436,7 @@ export default class AirportModel {
             runways: data.runways,
             controllerRadioNames: data.controllerRadioNames
         });
+        this._syncControllerActiveRunways();
 
         // Initialize simulated AI controllers for Australian airports
         if (isAustralianAirport(this.icao)) {
@@ -701,6 +702,7 @@ export default class AirportModel {
      */
     setArrivalRunway(runwayModel) {
         this.arrivalRunwayModel = runwayModel;
+        this._syncControllerActiveRunways();
     }
 
     /**
@@ -712,6 +714,25 @@ export default class AirportModel {
      */
     setDepartureRunway(runwayModel) {
         this.departureRunwayModel = runwayModel;
+        this._syncControllerActiveRunways();
+    }
+
+    /**
+     * Keep controllerConfig activeRunways synchronized with airport active runways.
+     *
+     * @for AirportModel
+     * @method _syncControllerActiveRunways
+     * @private
+     */
+    _syncControllerActiveRunways() {
+        if (!this.controllerConfig || typeof this.controllerConfig.setActiveRunways !== 'function') {
+            return;
+        }
+        const active = [
+            this.arrivalRunwayModel && this.arrivalRunwayModel.name,
+            this.departureRunwayModel && this.departureRunwayModel.name
+        ].filter(Boolean);
+        this.controllerConfig.setActiveRunways(active);
     }
 
     /**

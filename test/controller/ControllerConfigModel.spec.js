@@ -34,18 +34,15 @@ test('parses YSSY controllers config with published APP/DEP/TWR and simulated YM
     t.is(config.getTowerForRunway(null).frequency, '120.500');
 
     const sectors = config.getAllCentreSectors();
-    t.is(sectors.length, 2);
+    t.is(sectors.length, 1);
     t.is(sectors[0].sectorId, 'YMMM');
     t.is(sectors[0].frequency, '132.000');
     t.true(sectors[0].isSimulated);
-    t.is(sectors[1].sectorId, 'YBBB');
-    t.is(sectors[1].frequency, '133.150');
-    t.true(sectors[1].isSimulated);
 
     const adj = config.getAdjacentFrequencyList();
-    t.is(adj.length, 4);
+    t.is(adj.length, 2);
     t.true(adj.some((item) => item.role === CONTROLLER_TYPE.CTR && item.sector === 'YMMM' && item.isSimulated));
-    t.true(adj.some((item) => item.role === CONTROLLER_TYPE.TWR && item.frequency === '124.700' && !item.isSimulated));
+    t.true(adj.some((item) => item.role === CONTROLLER_TYPE.TWR && item.frequency === '120.500' && !item.isSimulated));
 
     airport.releaseWindListener();
 });
@@ -60,12 +57,12 @@ test('synthesizes simulated Australian fallback defaults for Y* airports without
     t.true(config.hasControllerConfig);
     t.is(config.getApproach().callsign, 'HB_APP');
     t.is(config.getApproach().radioName, 'Hobart Approach');
-    t.is(config.getApproach().source, FREQUENCY_SOURCE.SIMULATED);
-    t.true(config.getApproach().isSimulated);
+    t.is(config.getApproach().source, FREQUENCY_SOURCE.PUBLISHED);
+    t.false(config.getApproach().isSimulated);
     t.is(config.getTowerForRunway('12').callsign, 'HB_TWR');
     t.is(config.getTowerForRunway('12').radioName, 'Hobart Tower');
     t.deepEqual(config.getTowerForRunway('12').runways, ['12', '30']);
-    t.is(config.getAllCentreSectors().length, 2);
+    t.is(config.getAllCentreSectors().length, 1);
     t.is(config.getHandoffThresholds().recommendedNm, 12);
     t.is(config.getDepartureContactAltitudeAgl().minAgl, 500);
     t.is(config.getDepartureContactAltitudeAgl().targetAgl, 1500);
@@ -102,10 +99,27 @@ test('combines departure with approach when departure is omitted and supports ap
     t.false(updatedTwr.isSimulated);
 });
 
-test('selectCentreSector chooses YMMM vs YBBB deterministically by waypoint and bearing', (t) => {
+test('selectCentreSector chooses YMMM vs YBBB deterministically when multi-sector rules are configured', (t) => {
     const airport = new AirportModel(yssyData);
     airport.data = yssyData;
-    const config = airport.controllerConfig;
+    const config = new ControllerConfigModel({
+        centre: [
+            {
+                sectorId: 'YMMM',
+                callsign: 'YMMM',
+                frequency: '132.000',
+                source: 'simulated',
+                rules: { waypoints: ['KEVIN'], bearingRanges: [[90, 290]], default: true }
+            },
+            {
+                sectorId: 'YBBB',
+                callsign: 'YBBB',
+                frequency: '133.150',
+                source: 'simulated',
+                rules: { waypoints: ['BOREE'], bearingRanges: [[290, 90]] }
+            }
+        ]
+    }, { icao: 'YSSY' });
 
     const northWaypointAc = {
         altitude: 15000,

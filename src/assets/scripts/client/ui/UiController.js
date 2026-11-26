@@ -639,28 +639,34 @@ class UiController {
             return;
         }
 
-        const adjacentFrequencies = controllerConfig.getAdjacentFrequencyList();
+        const activeRunways = [
+            AirportController.current.arrivalRunwayModel && AirportController.current.arrivalRunwayModel.name,
+            AirportController.current.departureRunwayModel && AirportController.current.departureRunwayModel.name
+        ].filter(Boolean);
+        const adjacentFrequencies = controllerConfig.getAdjacentFrequencyList({ activeRunways });
 
         if (controllerConfig.approach && controllerConfig.approach.frequency) {
             const $active = $('<div class="frequency-panel-active"></div>');
-            $active.text(`Active: ${controllerConfig.approach.callsign} ${controllerConfig.approach.frequency}`);
+            const simTag = controllerConfig.approach.isSimulated ? ' (sim)' : '';
+            $active.text(`Active: ${controllerConfig.approach.callsign} ${controllerConfig.approach.frequency}${simTag}`);
             if (controllerConfig.approach.radioName) {
                 $active.prop('title', `${controllerConfig.approach.radioName} (Active)`);
             }
             this.$frequencyPanel.append($active);
         }
 
-        adjacentFrequencies.forEach(({ callsign, frequency, radioName, type }) => {
+        adjacentFrequencies.forEach(({ callsign, frequency, radioName, type, isSimulated }) => {
             const $row = $('<li class="frequency-panel-row"></li>');
+            const simTag = isSimulated ? ' (sim)' : '';
 
-            $row.text(`${callsign} ${frequency}`);
+            $row.text(`${callsign} ${frequency}${simTag}`);
 
             if (radioName) {
-                $row.prop('title', radioName);
+                $row.prop('title', isSimulated ? `${radioName} (Simulated)` : radioName);
             }
 
             $row.on('click', () => {
-                const targetType = type === 'ctr' || /CTR/i.test(callsign) ? 'ctr' : 'twr';
+                const targetType = type === 'CTR' || type === 'ctr' || /CTR|YMMM|YBBB/i.test(callsign) ? 'ctr' : 'twr';
                 const $cmd = $('#command');
                 if (!$cmd.length) return;
                 const current = String($cmd.val() || '').trim();

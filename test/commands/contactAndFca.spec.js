@@ -161,22 +161,22 @@ test.serial('contact ctr and unified runCentre validate sector, eligibility, and
         depNorth.speed = 250;
 
         // Not tracking outbound yet -> both contact ctr and centre must reject
-        t.false(commander.run(depNorth, 'contact', ['ctr', '133.15'])[0]);
+        t.false(commander.run(depNorth, 'contact', ['ctr', '132.0'])[0]);
         t.false(commander.run(depNorth, 'centre', [])[0]);
 
         sinon.stub(depNorth, 'isTrackingOutbound').returns(true);
         depNorth.fms.setDepartureOutbound('OLSEM');
 
-        // Wrong sector frequency (YMMM 132.000 instead of YBBB 133.150 for OLSEM)
-        const wrongSector = commander.run(depNorth, 'contact', ['ctr', '132.0']);
+        // Wrong Centre frequency (133.150 instead of YMMM 132.000)
+        const wrongSector = commander.run(depNorth, 'contact', ['ctr', '133.15']);
         t.false(wrongSector[0]);
-        t.regex(wrongSector[1], /YBBB/);
+        t.regex(wrongSector[1], /133\.150 is not a valid Centre frequency/);
 
-        // Correct sector frequency (133.15 -> 133.150)
-        const ok = commander.run(depNorth, 'contact', ['ctr', '133.15']);
+        // Correct single-sector Centre frequency (132.0 -> 132.000)
+        const ok = commander.run(depNorth, 'contact', ['ctr', '132.0']);
         t.true(ok[0]);
-        t.is(ok[1].log, 'contact YBBB on 133.150');
-        t.is(ok[1].say, 'contact Brisbane Centre on one three three decimal one five zero');
+        t.is(ok[1].log, 'contact YMMM on 132.000');
+        t.is(ok[1].say, 'contact Melbourne Centre on one three two decimal zero zero zero');
         t.true(depNorth.transferredToCentre);
         t.false(depNorth.isPlayerControlled());
         t.false(depNorth.isControllable);
@@ -396,7 +396,7 @@ test.serial('freqChangeApproved rejects IFR and airspace-ahead flights, and rele
             sinon.stub(depExit, 'isTrackingOutbound').returns(true);
             depExit.fms.setDepartureOutbound('OLSEM');
 
-            const handoff = commander.run(depExit, 'contact', ['ctr', '133.15']);
+            const handoff = commander.run(depExit, 'contact', ['ctr', '132.0']);
             t.true(handoff[0]);
             t.true(depExit.isInsideAirspace(airport));
             t.false(depExit.isRemovable);

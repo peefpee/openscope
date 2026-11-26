@@ -247,8 +247,15 @@ export const AUSTRALIAN_AIRPORT_SPOKEN_NAMES = Object.freeze({
     YSWS: 'Walton',
     YMML: 'Melbourne',
     YSSY: 'Sydney',
+    YBBN: 'Brisbane',
+    YPAD: 'Adelaide',
     YMHB: 'Hobart',
     YWLM: 'Williamtown',
+    YBCG: 'Gold Coast',
+    YBCS: 'Cairns',
+    YPPH: 'Perth',
+    YSCB: 'Canberra',
+    YPDN: 'Darwin',
     YMMM: 'Melbourne',
     YBBB: 'Brisbane'
 });
@@ -265,8 +272,15 @@ export const AUSTRALIAN_CONTROLLER_POSITION_PREFIXES = Object.freeze({
     YSWS: 'WS',
     YMML: 'ML',
     YSSY: 'SY',
+    YBBN: 'BN',
+    YPAD: 'AD',
     YMHB: 'HB',
-    YWLM: 'WLM'
+    YWLM: 'WLM',
+    YBCG: 'CG',
+    YBCS: 'CS',
+    YPPH: 'PH',
+    YSCB: 'CB',
+    YPDN: 'DN'
 });
 
 /**
@@ -287,12 +301,22 @@ export const CONTROLLER_RADIO_NAMES_BY_CALLSIGN = Object.freeze({
     SY_TWR: 'Sydney Tower',
     SY_TWR_E: 'Sydney Tower East',
     SY_DEP: 'Sydney Control',
+    BN_APP: 'Brisbane Approach',
+    BN_TWR: 'Brisbane Tower',
+    BN_DEP: 'Brisbane Departures',
+    AD_APP: 'Adelaide Approach',
+    AD_TWR: 'Adelaide Tower',
+    AD_DEP: 'Adelaide Departures',
     HB_APP: 'Hobart Approach',
     HB_TWR: 'Hobart Tower',
     HB_DEP: 'Hobart Departures',
     WLM_APP: 'Williamtown Approach',
     WLM_TWR: 'Williamtown Tower',
     WLM_DEP: 'Williamtown Departures',
+    CG_APP: 'Gold Coast Approach',
+    CG_TWR: 'Gold Coast Tower',
+    CS_APP: 'Cairns Approach',
+    CS_TWR: 'Cairns Tower',
     YMMM: 'Melbourne Centre',
     YBBB: 'Brisbane Centre'
 });
@@ -324,6 +348,18 @@ export const CONTROLLER_RADIO_NAMES_BY_AIRPORT = Object.freeze({
         DEP: 'Sydney Control',
         CTR: 'Melbourne Centre'
     },
+    YBBN: {
+        APP: 'Brisbane Approach',
+        TWR: 'Brisbane Tower',
+        DEP: 'Brisbane Departures',
+        CTR: 'Brisbane Centre'
+    },
+    YPAD: {
+        APP: 'Adelaide Approach',
+        TWR: 'Adelaide Tower',
+        DEP: 'Adelaide Departures',
+        CTR: 'Melbourne Centre'
+    },
     YMHB: {
         APP: 'Hobart Approach',
         TWR: 'Hobart Tower',
@@ -337,6 +373,80 @@ export const CONTROLLER_RADIO_NAMES_BY_AIRPORT = Object.freeze({
         CTR: 'Brisbane Centre'
     }
 });
+
+/**
+ * Authoritative single-sector Australian controller presets keyed by ICAO.
+ * Frequencies marked `simulated` are used where en-route sector frequencies
+ * vary by geographic gate in real-world ERSA.
+ */
+export const AUSTRALIAN_AIRPORT_CONTROLLER_PRESETS = Object.freeze({
+    YSSY: {
+        approach: { callsign: 'SY_APP', radioName: 'Sydney Approach', frequency: '124.400', source: 'published' },
+        departure: { callsign: 'SY_DEP', radioName: 'Sydney Control', frequency: '123.000', source: 'published' },
+        tower: [
+            { callsign: 'SY_TWR', radioName: 'Sydney Tower', frequency: '120.500', runways: ['16R', '34L', '07', '25'], source: 'published' },
+            { callsign: 'SY_TWR_E', radioName: 'Sydney Tower East', frequency: '124.700', runways: ['16L', '34R'], source: 'published' }
+        ],
+        centre: [
+            { sectorId: 'YMMM', callsign: 'YMMM', radioName: 'Melbourne Centre', frequency: '132.000', source: 'simulated', rules: { default: true } }
+        ]
+    },
+    YMML: {
+        approach: { callsign: 'ML_APP', radioName: 'Melbourne Approach', frequency: '132.000', source: 'published' },
+        departure: { callsign: 'ML_DEP', radioName: 'Melbourne Departures', frequency: '118.900', source: 'published' },
+        tower: [
+            { callsign: 'ML_TWR', radioName: 'Melbourne Tower', frequency: '120.500', runways: ['16', '34', '09', '27'], source: 'published' }
+        ],
+        centre: [
+            { sectorId: 'YMMM', callsign: 'YMMM', radioName: 'Melbourne Centre', frequency: '123.800', source: 'simulated', rules: { default: true } }
+        ]
+    },
+    YBBN: {
+        approach: { callsign: 'BN_APP', radioName: 'Brisbane Approach', frequency: '124.700', source: 'published' },
+        departure: { callsign: 'BN_DEP', radioName: 'Brisbane Departures', frequency: '118.450', source: 'published' },
+        tower: [
+            { callsign: 'BN_TWR', radioName: 'Brisbane Tower', frequency: '120.500', runways: ['01L', '19R', '01R', '19L', '14', '32'], source: 'published' }
+        ],
+        centre: [
+            { sectorId: 'YBBB', callsign: 'YBBB', radioName: 'Brisbane Centre', frequency: '133.150', source: 'simulated', rules: { default: true } }
+        ]
+    },
+    YPAD: {
+        approach: { callsign: 'AD_APP', radioName: 'Adelaide Approach', frequency: '118.200', source: 'published' },
+        departure: { callsign: 'AD_DEP', radioName: 'Adelaide Departures', frequency: '124.200', source: 'published' },
+        tower: [
+            { callsign: 'AD_TWR', radioName: 'Adelaide Tower', frequency: '120.500', runways: ['05', '23', '12', '30'], source: 'published' }
+        ],
+        centre: [
+            { sectorId: 'YMMM', callsign: 'YMMM', radioName: 'Melbourne Centre', frequency: '133.950', source: 'simulated', rules: { default: true } }
+        ]
+    },
+    YMHB: {
+        approach: { callsign: 'HB_APP', radioName: 'Hobart Approach', frequency: '125.550', source: 'published' },
+        departure: { callsign: 'HB_DEP', radioName: 'Hobart Departures', frequency: '125.550', source: 'published' },
+        tower: [
+            { callsign: 'HB_TWR', radioName: 'Hobart Tower', frequency: '118.100', runways: ['12', '30'], source: 'published' }
+        ],
+        centre: [
+            { sectorId: 'YMMM', callsign: 'YMMM', radioName: 'Melbourne Centre', frequency: '126.500', source: 'simulated', rules: { default: true } }
+        ]
+    },
+    YBCS: {
+        approach: { callsign: 'CS_APP', radioName: 'Cairns Approach', frequency: '118.400', source: 'simulated' },
+        departure: { callsign: 'CS_APP', radioName: 'Cairns Approach', frequency: '118.400', source: 'simulated' },
+        tower: [
+            { callsign: 'CS_TWR', radioName: 'Cairns Tower', frequency: '124.900', runways: ['15', '33'], source: 'simulated' }
+        ],
+        centre: [
+            { sectorId: 'YBBB', callsign: 'YBBB', radioName: 'Brisbane Centre', frequency: '126.100', source: 'published', rules: { default: true } }
+        ]
+    }
+});
+
+export function getAustralianControllerPreset(icao) {
+    const code = String(icao || '').trim().toUpperCase();
+    return AUSTRALIAN_AIRPORT_CONTROLLER_PRESETS[code] || null;
+}
 
 const GENERIC_CONTROLLER_RADIO_NAMES = Object.freeze({
     APP: 'Approach',

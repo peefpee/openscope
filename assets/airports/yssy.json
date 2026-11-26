@@ -78,20 +78,7 @@
                 "frequency": "132.000",
                 "source": "simulated",
                 "rules": {
-                    "waypoints": ["KEVIN", "JAKLN", "MANFA", "TONTO", "BANTU", "RIVET"],
-                    "bearingRanges": [[90, 290]],
                     "default": true
-                }
-            },
-            {
-                "sectorId": "YBBB",
-                "callsign": "YBBB",
-                "radioName": "Brisbane Centre",
-                "frequency": "133.150",
-                "source": "simulated",
-                "rules": {
-                    "waypoints": ["BOREE", "LANOL", "YAKKA", "OLSEM", "NOBAR", "AVMOV", "MARLN"],
-                    "bearingRanges": [[290, 90]]
                 }
             }
         ],

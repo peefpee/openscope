@@ -38,8 +38,7 @@ test('YSSY airport config exposes compact callsigns and spoken radio names', (t)
     t.is(config.tower[0].radioName, 'Sydney Tower');
     t.is(config.centre[0].callsign, 'YMMM');
     t.is(config.centre[0].radioName, 'Melbourne Centre');
-    t.is(config.centre[1].callsign, 'YBBB');
-    t.is(config.centre[1].radioName, 'Brisbane Centre');
+    t.is(config.centre.length, 1);
     const panel = config.getAdjacentFrequencyList({ includeLocal: true });
     t.true(panel.some((entry) => entry.callsign === 'SY_APP' && entry.radioName === 'Sydney Approach'));
     t.true(panel.some((entry) => entry.callsign === 'YMMM' && entry.radioName === 'Melbourne Centre'));

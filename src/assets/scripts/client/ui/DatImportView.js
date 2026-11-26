@@ -3,6 +3,12 @@ import navData from '../airport/dat/NavDataCache';
 import { importOpenAir } from '../airport/dat/parseOpenAir';
 import parseMsaDat from '../airport/dat/parseMsaDat';
 import AirportController from '../airport/AirportController';
+import {
+    FREQUENCY_SOURCE,
+    deriveAustralianControllerCallsign,
+    getAustralianControllerPreset,
+    normalizeFrequency
+} from '../constants/controllerConstants';
 import { parseAirportDat } from '../airport/dat/parseAirportDat';
 import { buildDatScope, resolveWaypoints } from '../airport/dat/buildDatScope';
 
@@ -99,12 +105,64 @@ export default class DatImportView {
                         centre: this.$dialog.find('#dat-centre-radio-name').val().trim()
                     };
 
-                    if (Object.values(controllerRadioNames).some(Boolean)) {
-                        this.airport = { ...this.airport, controllerRadioNames };
+                    const appFreq = normalizeFrequency(this.$dialog.find('#dat-approach-frequency').val());
+                    const twrFreq = normalizeFrequency(this.$dialog.find('#dat-tower-frequency').val());
+                    const ctrFreq = normalizeFrequency(this.$dialog.find('#dat-centre-frequency').val());
+                    const centreSector = this.$dialog.find('#dat-centre-select').val() || 'YMMM';
+                    const appCallsign = this.$dialog.find('#dat-approach-callsign').val().trim();
+                    const twrCallsign = this.$dialog.find('#dat-tower-callsign').val().trim();
+
+                    const controllerSettings = {
+                        approachCallsign: appCallsign,
+                        approachFrequency: appFreq || '',
+                        towerCallsign: twrCallsign,
+                        towerFrequency: twrFreq || '',
+                        centreSector,
+                        centreFrequency: ctrFreq || ''
+                    };
+
+                    if (Object.values(controllerRadioNames).some(Boolean) || Object.values(controllerSettings).some(Boolean)) {
+                        this.airport = { ...this.airport, controllerRadioNames, controllerSettings };
                         navData.save(this.airport);
                     }
 
-                    Object.assign(this.scope, { controllerRadioNames });
+                    const preset = getAustralianControllerPreset(this.scope.icao);
+                    const runwayNames = (this.scope.runways || []).reduce((acc, pair) => acc.concat(pair.name || []), []);
+                    const controllers = {
+                        approach: {
+                            callsign: appCallsign || (preset && preset.approach.callsign) ||
+                                deriveAustralianControllerCallsign(this.scope.icao, 'APP'),
+                            radioName: controllerRadioNames.approach || (preset && preset.approach.radioName),
+                            frequency: appFreq || (preset && preset.approach.frequency) || '124.100',
+                            source: appFreq ? FREQUENCY_SOURCE.USER : ((preset && preset.approach.source) || FREQUENCY_SOURCE.SIMULATED)
+                        },
+                        departure: {
+                            callsign: (preset && preset.departure && preset.departure.callsign) ||
+                                deriveAustralianControllerCallsign(this.scope.icao, 'DEP'),
+                            radioName: controllerRadioNames.departure || (preset && preset.departure && preset.departure.radioName),
+                            frequency: appFreq || (preset && preset.departure && preset.departure.frequency) || '124.100',
+                            source: appFreq ? FREQUENCY_SOURCE.USER : ((preset && preset.departure && preset.departure.source) || FREQUENCY_SOURCE.SIMULATED)
+                        },
+                        tower: [{
+                            callsign: twrCallsign || (preset && preset.tower[0] && preset.tower[0].callsign) ||
+                                deriveAustralianControllerCallsign(this.scope.icao, 'TWR'),
+                            radioName: controllerRadioNames.tower || (preset && preset.tower[0] && preset.tower[0].radioName),
+                            frequency: twrFreq || (preset && preset.tower[0] && preset.tower[0].frequency) || '118.100',
+                            runways: runwayNames,
+                            source: twrFreq ? FREQUENCY_SOURCE.USER : ((preset && preset.tower[0] && preset.tower[0].source) || FREQUENCY_SOURCE.SIMULATED)
+                        }],
+                        centre: [{
+                            sectorId: centreSector,
+                            callsign: centreSector,
+                            radioName: controllerRadioNames.centre || (centreSector === 'YBBB' ? 'Brisbane Centre' : 'Melbourne Centre'),
+                            frequency: ctrFreq || (preset && preset.centre[0] && preset.centre[0].sectorId === centreSector ?
+                                preset.centre[0].frequency : (centreSector === 'YBBB' ? '125.100' : '125.000')),
+                            source: ctrFreq ? FREQUENCY_SOURCE.USER : FREQUENCY_SOURCE.SIMULATED,
+                            rules: { default: true }
+                        }]
+                    };
+
+                    Object.assign(this.scope, { controllerRadioNames, controllers });
                 }
                 AirportController.openImportedAirport(this.scope);
                 this.$dialog[0].close();
@@ -215,7 +273,29 @@ export default class DatImportView {
 
         this.$dialog.find('#dat-spoken-name').val(spokenAirportName);
         const controllerNames = this.airport.controllerRadioNames || {};
+        const settings = this.airport.controllerSettings || {};
+        const preset = getAustralianControllerPreset(data.icao);
         this.$dialog.find('.dat-controller-names').prop('hidden', !this.scope || !data.icao.startsWith('Y'));
+        this.$dialog.find('#dat-approach-callsign').val(
+            settings.approachCallsign || (preset && preset.approach.callsign) ||
+            (data.icao ? deriveAustralianControllerCallsign(data.icao, 'APP') : '')
+        );
+        this.$dialog.find('#dat-approach-frequency').val(
+            settings.approachFrequency || (preset && preset.approach.frequency) || ''
+        );
+        this.$dialog.find('#dat-tower-callsign').val(
+            settings.towerCallsign || (preset && preset.tower[0] && preset.tower[0].callsign) ||
+            (data.icao ? deriveAustralianControllerCallsign(data.icao, 'TWR') : '')
+        );
+        this.$dialog.find('#dat-tower-frequency').val(
+            settings.towerFrequency || (preset && preset.tower[0] && preset.tower[0].frequency) || ''
+        );
+        this.$dialog.find('#dat-centre-select').val(
+            settings.centreSector || (preset && preset.centre[0] && preset.centre[0].sectorId) || 'YMMM'
+        );
+        this.$dialog.find('#dat-centre-frequency').val(
+            settings.centreFrequency || (preset && preset.centre[0] && !preset.centre[0].isSimulated && preset.centre[0].frequency) || ''
+        );
         for (const [key, selector] of Object.entries({
             approach: '#dat-approach-radio-name',
             departure: '#dat-departure-radio-name',

@@ -8,7 +8,8 @@ import {
     frequencyToKhz,
     isAustralianAirport,
     resolveControllerRadioName,
-    deriveAustralianControllerCallsign
+    deriveAustralianControllerCallsign,
+    getAustralianControllerPreset
 } from '../constants/controllerConstants';
 import { FLIGHT_RULES } from '../constants/aircraftConstants';
 import DynamicPositionModel from '../base/DynamicPositionModel';
@@ -95,6 +96,7 @@ export default class ControllerConfigModel {
          * @type {Array<Object>}
          */
         this.centre = [];
+        this.activeRunways = [];
 
         /**
          * Handoff threshold configuration (NM from runway threshold + optional deadlineSeconds)
@@ -623,15 +625,25 @@ export default class ControllerConfigModel {
         return this.evaluateFcaEligibility(aircraft, airportModel).eligible;
     }
 
+    setActiveRunways(runways = []) {
+        this.activeRunways = Array.isArray(runways) ?
+            runways.map((r) => String(r || '').trim().toUpperCase()).filter(Boolean) :
+            [];
+    }
+
     /**
      * Build the adjacent frequency list for display and UI panels
      *
      * @param {Object} [options={}]
      * @param {boolean} [options.includeLocal=false] - include APP and DEP entries
+     * @param {Array<string>} [options.activeRunways] - active runway names to filter Tower entries
      * @return {Array<Object>}
      */
     getAdjacentFrequencyList(options = {}) {
         const list = [];
+        const activeRunways = Array.isArray(options.activeRunways) ?
+            options.activeRunways.map((r) => String(r || '').trim().toUpperCase()).filter(Boolean) :
+            this.activeRunways;
 
         if (options.includeLocal) {
             if (this.approach && this.approach.frequency !== null) {
@@ -667,34 +679,39 @@ export default class ControllerConfigModel {
             }
         }
 
-        for (let i = 0; i < this.centre.length; i++) {
-            const c = this.centre[i];
+        const primaryCentre = this.centre.length > 0 ? this.centre[0] : null;
 
-            if (c.frequency === null) {
-                continue;
-            }
-
+        if (primaryCentre && primaryCentre.frequency !== null) {
             list.push({
                 role: CONTROLLER_TYPE.CTR,
                 type: CONTROLLER_TYPE.CTR,
-                callsign: c.callsign,
-                radioName: c.radioName,
-                frequency: c.frequency,
-                frequencyKhz: c.frequencyKhz,
-                sector: c.sectorId || c.callsign,
+                callsign: primaryCentre.callsign,
+                radioName: primaryCentre.radioName,
+                frequency: primaryCentre.frequency,
+                frequencyKhz: primaryCentre.frequencyKhz,
+                sector: primaryCentre.sectorId || primaryCentre.callsign,
                 runways: [],
-                source: c.source,
-                isSimulated: c.isSimulated,
-                isUserDefined: c.isUserDefined
+                source: primaryCentre.source,
+                isSimulated: primaryCentre.isSimulated,
+                isUserDefined: primaryCentre.isUserDefined
             });
         }
 
-        for (let i = 0; i < this.tower.length; i++) {
-            const t = this.tower[i];
+        const validTowers = this.tower.filter((t) => t.frequency !== null);
+        let relevantTowers = validTowers;
 
-            if (t.frequency === null) {
-                continue;
+        if (activeRunways.length > 0 && validTowers.length > 1) {
+            const matched = validTowers.filter((t) => !t.runways.length ||
+                t.runways.some((r) => activeRunways.includes(r)));
+            if (matched.length > 0) {
+                relevantTowers = matched;
+            } else {
+                relevantTowers = [validTowers[0]];
             }
+        }
+
+        for (let i = 0; i < relevantTowers.length; i++) {
+            const t = relevantTowers[i];
 
             list.push({
                 role: CONTROLLER_TYPE.TWR,
@@ -933,6 +950,36 @@ export default class ControllerConfigModel {
         const radio = options.radio || {};
         const spoken = options.controllerRadioNames || {};
         const runwayNames = this._extractRunwayNames(options.runways);
+        const preset = getAustralianControllerPreset(this.icao);
+
+        if (preset) {
+            this.approach = this._buildFrequencyEntry({
+                ...preset.approach,
+                radioName: spoken.approach || preset.approach.radioName,
+                fallbackRadioName: radio.app
+            }, preset.approach.source, CONTROLLER_TYPE.APP);
+
+            this.departure = this._buildFrequencyEntry({
+                ...preset.departure,
+                radioName: spoken.departure || preset.departure.radioName,
+                fallbackRadioName: radio.dep
+            }, preset.departure.source, CONTROLLER_TYPE.DEP);
+
+            this.tower = preset.tower.map((t, index) => this._buildTowerEntry({
+                ...t,
+                radioName: (index === 0 && spoken.tower) || t.radioName,
+                fallbackRadioName: radio.twr,
+                runways: (preset.tower.length === 1 && runwayNames.length) ? runwayNames : t.runways
+            }, t.source));
+
+            this.centre = preset.centre.slice(0, 1).map((c) => this._buildCentreEntry({
+                ...c,
+                radioName: spoken.centre || c.radioName
+            }, c.source));
+
+            return;
+        }
+
         const approachCallsign = deriveAustralianControllerCallsign(this.icao, CONTROLLER_TYPE.APP);
         const departureCallsign = deriveAustralianControllerCallsign(this.icao, CONTROLLER_TYPE.DEP);
         const towerCallsign = deriveAustralianControllerCallsign(this.icao, CONTROLLER_TYPE.TWR);
@@ -941,7 +988,7 @@ export default class ControllerConfigModel {
             callsign: approachCallsign,
             radioName: spoken.approach,
             fallbackRadioName: radio.app,
-            frequency: '124.400',
+            frequency: '124.100',
             source: FREQUENCY_SOURCE.SIMULATED
         }, FREQUENCY_SOURCE.SIMULATED, CONTROLLER_TYPE.APP);
 
@@ -949,7 +996,7 @@ export default class ControllerConfigModel {
             callsign: departureCallsign,
             radioName: spoken.departure,
             fallbackRadioName: radio.dep,
-            frequency: '123.000',
+            frequency: '124.100',
             source: FREQUENCY_SOURCE.SIMULATED
         }, FREQUENCY_SOURCE.SIMULATED, CONTROLLER_TYPE.DEP);
 
@@ -958,7 +1005,7 @@ export default class ControllerConfigModel {
                 callsign: towerCallsign,
                 radioName: spoken.tower,
                 fallbackRadioName: radio.twr,
-                frequency: '120.500',
+                frequency: '118.100',
                 runways: runwayNames,
                 source: FREQUENCY_SOURCE.SIMULATED
             }, FREQUENCY_SOURCE.SIMULATED)
@@ -968,21 +1015,11 @@ export default class ControllerConfigModel {
             this._buildCentreEntry({
                 sectorId: 'YMMM',
                 callsign: 'YMMM',
-                radioName: spoken.centre,
-                frequency: '132.000',
+                radioName: spoken.centre || 'Melbourne Centre',
+                frequency: '125.000',
                 source: FREQUENCY_SOURCE.SIMULATED,
                 rules: {
-                    bearingRanges: [[90, 290]],
                     default: true
-                }
-            }, FREQUENCY_SOURCE.SIMULATED),
-            this._buildCentreEntry({
-                sectorId: 'YBBB',
-                callsign: 'YBBB',
-                frequency: '133.150',
-                source: FREQUENCY_SOURCE.SIMULATED,
-                rules: {
-                    bearingRanges: [[290, 90]]
                 }
             }, FREQUENCY_SOURCE.SIMULATED)
         ];
