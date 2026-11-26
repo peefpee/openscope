@@ -21,10 +21,10 @@
 | B.2 | OCTA navigation and controlled-airspace protection (2.1) | Verified | Updated `Trajectory.js`, `VfrArrival.js`, and `Pilot.js` with hysteresis to prevent heading oscillation, vertical buffer checks, safe shelf-leveling, `evaluateOctaCommand()` for unable heading responses, 16-angle `clearOrbit` with entry-arc check, and `octaStatus` state tracking. |
 | B.3 | Airspace-specific entry clearances (2.2) | Verified | Updated `AirspaceIndex.js`, `ClearanceStateManager.js`, `AircraftCommander.js`, `argumentValidators.js`, and `aircraftCommandDefinitions.js` to support scoped `clearentry [sector] [maxAlt]`, Class A/E/P/R rules, CTR/CTA/TMA classification, and revoked/superseded status checks. |
 | B.4 | Airspace importing and data integrity (6) | Verified | Updated `parseOpenAir.js`, `australianAirspace.js`, and `NavDataCache.js` with detailed import diagnostics (`accepted`, `rejected`, `missingAltitudes`, `invalidGeometries`, `unsupportedRecords`, `coverageLimitations`), `airspaceDiagnostics` fallback tracking, and `getCompatibleRecord()`. |
-| C.1 | Automated Tower arrival sequencing (3.1) | Pending | |
-| C.2 | Improve Tower handoffs (3.2) | Pending | |
-| C.3 | Departure sequencing (3.3) | Pending | |
-| C.4 | Missed approaches and go-arounds (3.4) | Pending | |
+| C.1 | Automated Tower arrival sequencing (3.1) | Verified | Added `buildArrivalSequence()`, `_hasRunwayConflict()`, `_requiredWakeSeparationNm()`, and sequence-aware `manageLandingClearance()` in `TowerController.js` checking distance, ETA, wake turbulence, opposite/intersecting runways, and go-around on separation failure. |
+| C.2 | Improve Tower handoffs (3.2) | Verified | Updated `isArrivalEligibleForTowerHandoff()` in `TowerController.js` to support IFR ILS/RNAV/visual and VFR entry-cleared circuit/inbound handoffs without circular deadlocks. |
+| C.3 | Departure sequencing (3.3) | Verified | Added `isRunwayClearForDeparture()` and `setTraffic()` in `TowerController.js`, wired into `AircraftModel.js` `FLIGHT_PHASE.WAITING` takeoff checks and `AircraftController.js`. |
+| C.4 | Missed approaches and go-arounds (3.4) | Verified | Parsed `missedApproach` legs in `buildDatApproaches.js`; updated `AircraftModel.cancelLanding()` and `TowerController._triggerMissedHandoffGoAround()` to use published missed approach or clearly tagged `synthetic` runway-heading fallback and return ownership to APP. |
 | D.1 | Unified trajectory prediction (4.1) | Pending | |
 | D.2 | Conflict detection and Australian separation (4.2) | Pending | |
 | D.3 | Performance profiling and optimisation (9) | Pending | |

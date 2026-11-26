@@ -367,6 +367,11 @@ export default class AircraftController {
             return;
         }
 
+        const activeAirport = AirportController.current;
+        if (activeAirport && activeAirport.towerController) {
+            activeAirport.towerController.setTraffic(this.aircraft.list);
+        }
+
         // TODO: this is getting better, but still needs more simplification
         for (let i = 0; i < this.aircraft.list.length; i++) {
             const aircraftModel = this.aircraft.list[i];

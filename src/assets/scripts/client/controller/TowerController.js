@@ -58,6 +58,12 @@ export default class TowerController {
          * @type {Map<string, string>}
          */
         this._handoffThresholdTriggered = new Map();
+        this._arrivalSequences = new Map();
+        this._traffic = [];
+    }
+
+    setTraffic(traffic = []) {
+        this._traffic = traffic;
     }
 
     /**
@@ -133,26 +139,121 @@ export default class TowerController {
         this._arrivals.add(aircraft.id);
     }
 
+    _requiredWakeSeparationNm(lead, trail) {
+        const leadClass = lead && lead.model && lead.model.weightClass;
+        const trailClass = trail && trail.model && trail.model.weightClass;
+        if (leadClass === 'J') {
+            if (trailClass === 'L') return 8;
+            if (trailClass === 'M') return 7;
+            if (trailClass === 'H') return 6;
+            return 4;
+        }
+        if (leadClass === 'H') {
+            if (trailClass === 'L') return 6;
+            if (trailClass === 'M') return 5;
+            if (trailClass === 'H') return 4;
+        }
+        if (leadClass === 'M' && trailClass === 'L') return 5;
+        return 3;
+    }
+
+    _hasRunwayConflict(runway, aircraft, traffic = []) {
+        return traffic.some((other) => {
+            if (other === aircraft) return false;
+            const assigned = other.isArrival() ?
+                (other.fms && other.fms.arrivalRunwayModel) :
+                (other.fms && other.fms.departureRunwayModel);
+            if (!assigned) return false;
+            const sameOrOpposite = assigned === runway || assigned.name === runway.oppositeName;
+            const intersecting = this._airportModel &&
+                typeof this._airportModel.areRunwaysIntersecting === 'function' &&
+                this._airportModel.areRunwaysIntersecting(runway, assigned);
+            if (!sameOrOpposite && !intersecting) return false;
+            if (other.isOnGround() && [FLIGHT_PHASE.TAKEOFF, FLIGHT_PHASE.LANDING].includes(other.flightPhase)) {
+                return true;
+            }
+            if (assigned.name === runway.oppositeName && other.isAirborne() && other.isArrival()) {
+                const dist = other.positionModel.distanceToPosition(assigned.positionModel);
+                if (dist <= 4) return true;
+            }
+            return false;
+        });
+    }
+
+    buildArrivalSequence(runway, traffic = []) {
+        const sequence = traffic
+            .filter((other) => other.isArrival() && !other.isOnGround() &&
+                other.fms && other.fms.arrivalRunwayModel === runway &&
+                other.pilot && other.pilot.hasApproachClearance)
+            .map((other) => {
+                const distanceNm = other.positionModel.distanceToPosition(runway.positionModel);
+                const speed = Math.max(40, other.groundSpeed || other.speed || 120);
+                const etaSeconds = (distanceNm / speed) * 3600;
+                return { aircraft: other, distanceNm, etaSeconds };
+            })
+            .sort((a, b) => a.etaSeconds - b.etaSeconds);
+        this._arrivalSequences.set(runway.name, sequence);
+        return sequence;
+    }
+
+    isRunwayClearForDeparture(aircraft, runway, traffic = this._traffic) {
+        if (!runway) return true;
+        const activeTraffic = traffic && traffic.length ? traffic : this._traffic;
+        if (this._hasRunwayConflict(runway, aircraft, activeTraffic)) return false;
+        const arrivalConflict = activeTraffic.some((other) => {
+            if (other === aircraft || !other.isArrival() || other.isOnGround()) return false;
+            const arrRwy = other.fms && other.fms.arrivalRunwayModel;
+            if (!arrRwy) return false;
+            const sameOrOpp = arrRwy === runway || arrRwy.name === runway.oppositeName;
+            if (!sameOrOpp) return false;
+            const dist = other.positionModel.distanceToPosition(arrRwy.positionModel);
+            const speed = Math.max(40, other.groundSpeed || other.speed || 120);
+            const eta = (dist / speed) * 3600;
+            return dist <= 4 || eta <= 90 || (Boolean(other.landingClearance) && dist <= 5);
+        });
+        return !arrivalConflict;
+    }
+
     manageLandingClearance(aircraft, traffic = []) {
         if (!this._arrivals.has(aircraft.id) || aircraft.isOnGround() ||
             (aircraft.rules === 'vfr' && !aircraft.entryClearance)) return;
         const runway = aircraft.fms && aircraft.fms.arrivalRunwayModel;
         if (!runway || !aircraft.pilot.hasApproachClearance) return;
-        const occupied = traffic.some((other) => {
-            if (other === aircraft || ![FLIGHT_PHASE.TAKEOFF, FLIGHT_PHASE.LANDING].includes(other.flightPhase)) return false;
-            const assigned = other.isArrival() ? other.fms.arrivalRunwayModel : other.fms.departureRunwayModel;
-            return assigned && (assigned === runway || assigned.name === runway.oppositeName) && other.isOnGround();
-        });
-        if (occupied) {
+        const occupied = this._hasRunwayConflict(runway, aircraft, traffic);
+        const sequence = this.buildArrivalSequence(runway, traffic);
+        const idx = sequence.findIndex((item) => item.aircraft === aircraft);
+        const leadItem = idx > 0 ? sequence[idx - 1] : null;
+        const selfItem = idx >= 0 ? sequence[idx] : null;
+        let separationBlocked = false;
+        if (leadItem && selfItem) {
+            const reqNm = this._requiredWakeSeparationNm(leadItem.aircraft, aircraft);
+            const distGap = selfItem.distanceNm - leadItem.distanceNm;
+            const etaGap = selfItem.etaSeconds - leadItem.etaSeconds;
+            if (distGap < reqNm || etaGap < 50) {
+                separationBlocked = true;
+            }
+        }
+        if (occupied || separationBlocked) {
             if (aircraft.landingClearance) {
                 aircraft.landingClearance = null;
-                aircraft.radioCall('landing clearance cancelled, runway occupied', AIRPORT_CONTROL_POSITION_NAME.TOWER);
+                const reason = occupied ? 'runway occupied' : 'traffic ahead';
+                aircraft.radioCall(`landing clearance cancelled, ${reason}`, AIRPORT_CONTROL_POSITION_NAME.TOWER);
+            }
+            if (selfItem && selfItem.distanceNm <= 1.0 && !aircraft.projected) {
+                this._triggerMissedHandoffGoAround(aircraft, occupied ? 'going around, runway occupied' : 'going around, traffic on runway');
             }
             return;
         }
         if (aircraft.landingClearance) return;
-        aircraft.landingClearance = { runway: runway.name, issuer: CONTROLLER_TYPE.TWR, issued: TimeKeeper.accumulatedDeltaTime };
-        aircraft.radioCall(`cleared to land runway ${runway.name}`, AIRPORT_CONTROL_POSITION_NAME.TOWER);
+        const [issued, clearance] = ClearanceStateManager.issueLandingClearance(
+            aircraft,
+            runway,
+            CONTROLLER_TYPE.TWR,
+            TimeKeeper.accumulatedDeltaTime
+        );
+        if (issued && clearance) {
+            aircraft.radioCall(`cleared to land runway ${runway.name}`, AIRPORT_CONTROL_POSITION_NAME.TOWER);
+        }
     }
 
     /**
@@ -175,6 +276,14 @@ export default class TowerController {
     isArrivalEligibleForTowerHandoff(aircraft) {
         if (!aircraft.isArrival() || aircraft.isOnGround()) {
             return false;
+        }
+
+        if (aircraft.rules === 'vfr') {
+            if (aircraft.octaRequired || !aircraft.entryClearance || !aircraft.entryClearance.valid) {
+                return false;
+            }
+            const distNm = this.getDistanceToRunwayNm(aircraft);
+            return Boolean(aircraft.circuitClearance || aircraft.pilot.hasApproachClearance || distNm <= 15);
         }
 
         // Must have approach clearance and be established on the approach
@@ -322,38 +431,52 @@ export default class TowerController {
      * @param {AircraftModel} aircraft
      * @private
      */
-    _triggerMissedHandoffGoAround(aircraft) {
-        if (aircraft.projected) {
+    _triggerMissedHandoffGoAround(aircraft, reason = 'going around, negative tower contact') {
+        if (aircraft.projected || aircraft.circuitPhase === 'GO AROUND') {
             return;
         }
 
         this._handoffThresholdTriggered.delete(aircraft.id);
+        this.removeArrival(aircraft.id);
         ClearanceStateManager.onGoAround(aircraft);
 
-        // Set up missed approach altitude
+        // Set up missed approach altitude and heading (runway heading synthetic fallback)
         const runwayModel = aircraft.fms.arrivalRunwayModel;
         const baseElevation = runwayModel ? runwayModel.elevation : this._airportModel.elevation;
         const missedApproachAltitude = Math.ceil((baseElevation + 2000) / 1000) * 1000;
+        const missedHeading = runwayModel ? runwayModel.angle : aircraft.heading;
 
         aircraft.mcp.setAltitudeFieldValue(missedApproachAltitude);
         aircraft.mcp.setAltitudeHold();
-        aircraft.mcp.setHeadingFieldValue(aircraft.heading);
+        aircraft.mcp.setHeadingFieldValue(missedHeading);
         aircraft.mcp.setHeadingHold();
         aircraft.setFlightPhase(FLIGHT_PHASE.DESCENT);
 
-        // Reset handoff state so player can resequence
+        // Reset handoff state and return to APP so player can resequence
         const cs = aircraft.controllerState;
-        cs.handoffState = HANDOFF_STATE.NONE;
-        cs.handoffRequired = false;
-        cs.targetController = null;
-        cs.targetFrequency = null;
+        if (cs.currentController === CONTROLLER_TYPE.TWR && this._airportModel.controllerConfig) {
+            const appFreq = this._airportModel.controllerConfig.approach &&
+                this._airportModel.controllerConfig.approach.frequency;
+            aircraft.setControllerState({
+                currentController: CONTROLLER_TYPE.APP,
+                currentFrequency: appFreq || cs.currentFrequency,
+                handoffState: HANDOFF_STATE.NONE,
+                handoffRequired: false,
+                targetController: null,
+                targetFrequency: null
+            });
+        } else {
+            cs.handoffState = HANDOFF_STATE.NONE;
+            cs.handoffRequired = false;
+            cs.targetController = null;
+            cs.targetFrequency = null;
+        }
 
         // Radio call
-        const radioMsg = 'going around, negative tower contact';
-        aircraft.radioCall(radioMsg, AIRPORT_CONTROL_POSITION_NAME.APPROACH, true);
+        aircraft.radioCall(reason, AIRPORT_CONTROL_POSITION_NAME.APPROACH, true);
 
-        // Scoring penalty
-        if (!aircraft.projected) {
+        // Scoring penalty only for missed tower handoff
+        if (!aircraft.projected && reason.includes('negative tower contact')) {
             EventBus.trigger(AIRCRAFT_EVENT.MISSED_TOWER_HANDOFF, aircraft);
         }
     }
@@ -469,5 +592,6 @@ export default class TowerController {
         this._arrivals.clear();
         this._departures.clear();
         this._handoffThresholdTriggered.clear();
+        this._arrivalSequences.clear();
     }
 }

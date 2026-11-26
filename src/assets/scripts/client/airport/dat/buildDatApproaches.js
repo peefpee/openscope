@@ -72,7 +72,24 @@ export function buildDatApproaches(data, positionFor) {
                 previous = coordinates;
             }
             if (points.length > 1 && points[points.length - 1].name === main[main.length - 1].fix) {
-                routes.push({ id: procedure.id, runway: match[1], points });
+                const missedLegs = final.legs.slice(end + 1);
+                const missedApproach = [];
+                for (const mLeg of missedLegs) {
+                    const mCoords = positionFor(mLeg);
+                    if (!mCoords) continue;
+                    missedApproach.push({
+                        name: mLeg.fix,
+                        coordinates: mCoords,
+                        altitude: altitudeFeet(mLeg.altitude),
+                        speed: /^-?\s*\d{3}$/.test(mLeg.speed) ? Number(mLeg.speed.replace(/[-\s]/g, '')) : null
+                    });
+                }
+                routes.push({
+                    id: procedure.id,
+                    runway: match[1],
+                    points,
+                    missedApproach: missedApproach.length ? missedApproach : null
+                });
             }
         }
     }

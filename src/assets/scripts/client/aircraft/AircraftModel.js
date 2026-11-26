@@ -1037,8 +1037,12 @@ export default class AircraftModel {
             return;
         }
 
+        const prevGuidance = this.pilot && this.pilot.approachGuidance;
         ClearanceStateManager.onGoAround(this);
-        const missedApproachAltitude = _ceil(this.fms.arrivalRunwayModel.elevation + 2000, -3);
+        const runwayModel = this.fms.arrivalRunwayModel;
+        const airport = AirportController.current;
+        const baseElevation = runwayModel ? runwayModel.elevation : (airport ? airport.elevation : 0);
+        const missedApproachAltitude = _ceil(baseElevation + 2000, -3);
         const nextIfrAltitudeBelow = _floor(this.altitude, -3);
         let nextAltitudeToMaintain = missedApproachAltitude;
         let radioMessage = `going missed approach, present heading, climbing to ${missedApproachAltitude}`;
@@ -1048,12 +1052,24 @@ export default class AircraftModel {
             radioMessage = `going missed approach, present heading, leveling at ${nextIfrAltitudeBelow}`;
         }
 
+        const published = airport && airport.data && airport.data.rnavApproaches && prevGuidance &&
+            airport.data.rnavApproaches.find((r) => `RNAV ${r.id}` === prevGuidance.name && r.missedApproach);
+        if (published && published.missedApproach.length) {
+            const firstMissedAlt = published.missedApproach.find((p) => Number.isFinite(p.altitude));
+            if (firstMissedAlt) {
+                nextAltitudeToMaintain = Math.max(nextAltitudeToMaintain, firstMissedAlt.altitude);
+            }
+            this.missedApproachType = 'published';
+            radioMessage = `going missed approach via ${published.id}, climbing to ${nextAltitudeToMaintain}`;
+        } else {
+            this.missedApproachType = 'synthetic';
+        }
+
         this.mcp.setAltitudeFieldValue(nextAltitudeToMaintain);
         this.mcp.setAltitudeHold();
-        this.mcp.setHeadingFieldValue(this.heading);
+        this.mcp.setHeadingFieldValue(runwayModel ? runwayModel.angle : this.heading);
         this.mcp.setHeadingHold();
         this.setFlightPhase(FLIGHT_PHASE.DESCENT);
-        const airport = AirportController.current;
         if (airport && airport.towerController && this.controllerState.currentController === CONTROLLER_TYPE.TWR) {
             airport.towerController.removeArrival(this.id);
             this.setControllerState({
@@ -1824,6 +1840,12 @@ export default class AircraftModel {
                         if (actualDistance < towerUtilizedDistance || lastDeparture.isOnGround()) {
                             break;
                         }
+                    }
+
+                    const airport = AirportController.current;
+                    if (airport && airport.towerController && airport.towerController.isActive &&
+                        !airport.towerController.isRunwayClearForDeparture(this, this.fms.departureRunwayModel, [])) {
+                        break;
                     }
 
                     this.fms.departureRunwayModel.removeAircraftFromQueue(this.id);
