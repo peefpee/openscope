@@ -25,9 +25,9 @@
 | C.2 | Improve Tower handoffs (3.2) | Verified | Updated `isArrivalEligibleForTowerHandoff()` in `TowerController.js` to support IFR ILS/RNAV/visual and VFR entry-cleared circuit/inbound handoffs without circular deadlocks. |
 | C.3 | Departure sequencing (3.3) | Verified | Added `isRunwayClearForDeparture()` and `setTraffic()` in `TowerController.js`, wired into `AircraftModel.js` `FLIGHT_PHASE.WAITING` takeoff checks and `AircraftController.js`. |
 | C.4 | Missed approaches and go-arounds (3.4) | Verified | Parsed `missedApproach` legs in `buildDatApproaches.js`; updated `AircraftModel.cancelLanding()` and `TowerController._triggerMissedHandoffGoAround()` to use published missed approach or clearly tagged `synthetic` runway-heading fallback and return ownership to APP. |
-| D.1 | Unified trajectory prediction (4.1) | Pending | |
-| D.2 | Conflict detection and Australian separation (4.2) | Pending | |
-| D.3 | Performance profiling and optimisation (9) | Pending | |
+| D.1 | Unified trajectory prediction (4.1) | Verified | Extended `Trajectory.js` `trajectory()` to support speed acceleration/deceleration, FMS/LNAV waypoints, VORLOC/ILS glideslope, VFR orbits, and approach/missed-approach guidance without mutating live aircraft state. |
+| D.2 | Conflict detection and Australian separation (4.2) | Verified | Updated `AircraftConflict.js` with cache-key invalidation in `projectedPath()`, Super (`J`) & Heavy (`H`) wake turbulence conflicts, `airspaceInfringement`, and `restrictedAirspaceInfringement` detection without duplicate scoring events. |
+| D.3 | Performance profiling and optimisation (9) | Verified | Added vertical candidate filtering in `AircraftController._shouldAddNewConflict()`, prediction cache invalidation, and full resource/listener/projection cleanup in `AircraftController.aircraft_remove()`. |
 | E.1 | Reporting point selection (5.1) | Pending | |
 | E.2 | Circuit navigation & VFR traffic management (5.2, 5.3) | Pending | |
 | E.3 | Australian phraseology (7) | Pending | |

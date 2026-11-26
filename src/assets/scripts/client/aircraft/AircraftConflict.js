@@ -14,8 +14,13 @@ import { SEPARATION } from '../constants/aircraftConstants';
 import { EVENT } from '../constants/eventNames';
 
 function projectedPath(aircraft, airport, now, seconds) {
-    if (!aircraft.conflictProjection || now >= aircraft.conflictProjection.expires) {
+    const hdgMode = aircraft.mcp ? aircraft.mcp.headingMode : '';
+    const altMode = aircraft.mcp ? aircraft.mcp.altitudeMode : '';
+    const spd = aircraft.target ? Math.round(aircraft.target.speed || 0) : 0;
+    const key = `${Math.round((aircraft.targetHeading || 0) * 100)}|${Math.round((aircraft.target && aircraft.target.altitude) || 0)}|${spd}|${hdgMode}|${altMode}|${Boolean(aircraft.octaGuidance)}|${seconds}`;
+    if (!aircraft.conflictProjection || now >= aircraft.conflictProjection.expires || aircraft.conflictProjection.key !== key) {
         aircraft.conflictProjection = {
+            key,
             expires: now + 4,
             samples: trajectory(aircraft, airport, seconds, aircraft.targetHeading, aircraft.target.altitude, !aircraft.octaGuidance)
         };
@@ -202,7 +207,9 @@ export default class AircraftConflict {
         if (this.nextSeparationCheck > now) return;
         this.nextSeparationCheck = now + 1;
         const lookup = (ac) => airport.getAirspaceAtPosition(ac.relativePosition, ac.altitude);
-        const classes = new Set([...lookup(a), ...lookup(b)].map((area) => area.airspace_class));
+        const aAreas = lookup(a);
+        const bAreas = lookup(b);
+        const classes = new Set([...aAreas, ...bAreas].map((area) => area.airspace_class));
         const ifr = Number(a.rules !== 'vfr') + Number(b.rules !== 'vfr');
         const mandatory = classes.has('A') || classes.has('B') || (classes.has('C') && ifr > 0) ||
             ((classes.has('D') || classes.has('E')) && ifr === 2);
@@ -211,17 +218,25 @@ export default class AircraftConflict {
         const otherRunway = assignedRunway(b);
         const sameRunway = runway && otherRunway &&
             (runway === otherRunway || runway.name === otherRunway.oppositeName);
-        const heavyPair = a.model.weightClass !== b.model.weightClass && [a, b].some((ac) => ac.model.weightClass === 'H');
+        const heavyOrSuperPair = a.model.weightClass !== b.model.weightClass &&
+            [a, b].some((ac) => ac.model.weightClass === 'H' || ac.model.weightClass === 'J');
         const config = airport.data.separationOptions || {};
         const miles = config.surveillance === false ? 5 : 3;
         const standardMiles = mandatory ? miles : 1;
-        const lateral = (sameRunway && heavyPair ? Math.max(miles, 5) : standardMiles) * 1.852;
+        const wakeMiles = [a, b].some((ac) => ac.model.weightClass === 'J') ? 6 : 5;
+        const lateral = (sameRunway && heavyOrSuperPair ? Math.max(miles, wakeMiles) : standardMiles) * 1.852;
         const vertical = mandatory ? 1000 : 500;
         const airborne = !a.isOnGround() && !b.isOnGround();
         const runwayConflict = sameRunway && (a.isOnGround() || b.isOnGround()) &&
             this.distance < 1.852 && this.altitude < 300;
+        const wakeConflict = airborne && sameRunway && heavyOrSuperPair &&
+            this.distance < wakeMiles * 1.852 && this.altitude < vertical;
         const loss = airborne && mandatory && this.distance < lateral && this.altitude < vertical;
         this.conflicts.runway = Boolean(runwayConflict);
+        this.conflicts.wakeTurbulence = Boolean(wakeConflict);
+        this.conflicts.airspaceInfringement = Boolean(a.infringing || b.infringing);
+        this.conflicts.restrictedAirspaceInfringement = [...aAreas, ...bAreas]
+            .some((area) => area.type === 'P' || area.type === 'R');
         if (loss && !this.violations.proximityViolation && this.aircraft.some((ac) => ac.isPlayerControlled())) {
             GameController.events_recordNew(GAME_EVENTS.SEPARATION_LOSS);
         }

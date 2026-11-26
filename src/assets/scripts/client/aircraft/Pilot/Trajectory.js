@@ -1,6 +1,8 @@
 import { PERFORMANCE } from '../../constants/aircraftConstants';
-import { heading_to_string } from '../../utilities/unitConverters';
+import { MCP_MODE } from '../ModeControl/modeControlConstants';
+import { heading_to_string, km } from '../../utilities/unitConverters';
 import { radio_heading } from '../../utilities/radioUtilities';
+import { getOffset } from '../../math/flightMath';
 
 const KM_PER_KNOT_SECOND = 1.852 / 3600;
 
@@ -17,11 +19,22 @@ export function trajectory(aircraft, airport, seconds, targetHeading, targetAlti
     let [x, y] = aircraft.relativePosition;
     let { altitude } = aircraft;
     let { heading } = aircraft;
-    const speed = Math.max(0, aircraft.trueAirspeed || aircraft.speed);
+    let speed = Math.max(0, aircraft.trueAirspeed || aircraft.speed);
+    const targetSpeed = (aircraft.target && Number.isFinite(aircraft.target.speed)) ?
+        aircraft.target.speed :
+        speed;
+    const accel = (aircraft.model && aircraft.model.rate && aircraft.model.rate.accelerate) || 7;
+    const decel = (aircraft.model && aircraft.model.rate && aircraft.model.rate.decelerate) || 3;
     const rate = turnRate(aircraft);
     const climb = aircraft.model.rate.climb / 60;
     const descent = aircraft.model.rate.descent / 60;
     const route = followRoute && aircraft.pilot && aircraft.pilot.approachGuidance;
+    const lnavMode = followRoute && !route && aircraft.mcp && aircraft.mcp.headingMode === MCP_MODE.HEADING.LNAV;
+    const vorlocMode = followRoute && !route && aircraft.mcp && aircraft.mcp.headingMode === MCP_MODE.HEADING.VORLOC;
+    const ilsGsMode = followRoute && !route && aircraft.mcp && aircraft.mcp.altitudeMode === MCP_MODE.ALTITUDE.APPROACH;
+    const orbit = followRoute && !route && aircraft.vfrOrbit;
+    const fmsWaypoint = lnavMode && aircraft.fms && aircraft.fms.currentWaypoint;
+    const arrivalRunway = (vorlocMode || ilsGsMode) && aircraft.fms && aircraft.fms.arrivalRunwayModel;
     let leg = route ? route.index : 0;
     let desiredHeading = targetHeading;
     let desiredAltitude = targetAltitude;
@@ -42,13 +55,43 @@ export function trajectory(aircraft, airport, seconds, targetHeading, targetAlti
             const crosswind = wind[0] * Math.cos(track) - wind[1] * Math.sin(track);
             desiredHeading = track - Math.asin(Math.max(-1, Math.min(1, crosswind / Math.max(1, speed))));
             if (waypoint && Number.isFinite(waypoint.altitude)) desiredAltitude = waypoint.altitude;
+        } else if (orbit && orbit.center) {
+            const [cx, cy] = orbit.center.relativePosition;
+            const distNm = Math.hypot(x - cx, y - cy) / 1.852;
+            const bearing = Math.atan2(x - cx, y - cy);
+            const track = bearing + Math.PI / 2 + Math.atan2(distNm - (orbit.radius || 1), 0.4);
+            const crosswind = wind[0] * Math.cos(track) - wind[1] * Math.sin(track);
+            desiredHeading = track - Math.asin(Math.max(-1, Math.min(1, crosswind / Math.max(1, speed))));
+            if (Number.isFinite(orbit.altitude)) desiredAltitude = orbit.altitude;
+        } else if (fmsWaypoint && fmsWaypoint.relativePosition) {
+            const [wx, wy] = fmsWaypoint.relativePosition;
+            const track = Math.atan2(wx - x, wy - y);
+            const crosswind = wind[0] * Math.cos(track) - wind[1] * Math.sin(track);
+            desiredHeading = track - Math.asin(Math.max(-1, Math.min(1, crosswind / Math.max(1, speed))));
+        } else if (arrivalRunway) {
+            const [lateral, along] = getOffset(
+                { relativePosition: [x, y], heading },
+                arrivalRunway.relativePosition,
+                arrivalRunway.angle
+            );
+            const track = arrivalRunway.angle - Math.atan2(lateral / 1.852, 1.5);
+            const crosswind = wind[0] * Math.cos(track) - wind[1] * Math.sin(track);
+            desiredHeading = track - Math.asin(Math.max(-1, Math.min(1, crosswind / Math.max(1, speed))));
+            if (ilsGsMode && typeof arrivalRunway.getGlideslopeAltitude === 'function') {
+                desiredAltitude = Math.max(arrivalRunway.elevation, arrivalRunway.getGlideslopeAltitude(km(along / 1.852)));
+            }
+        }
+        if (speed < targetSpeed) {
+            speed = Math.min(targetSpeed, speed + accel * dt);
+        } else if (speed > targetSpeed) {
+            speed = Math.max(targetSpeed, speed - decel * dt);
         }
         const error = Math.atan2(Math.sin(desiredHeading - heading), Math.cos(desiredHeading - heading));
         heading += Math.sign(error) * Math.min(Math.abs(error), rate * dt);
         altitude += Math.max(-descent * dt, Math.min(climb * dt, desiredAltitude - altitude));
         x += (Math.sin(heading) * speed + wind[0]) * KM_PER_KNOT_SECOND * dt;
         y += (Math.cos(heading) * speed + wind[1]) * KM_PER_KNOT_SECOND * dt;
-        samples.push({ position: [x, y], altitude, seconds: elapsed + dt });
+        samples.push({ position: [x, y], altitude, speed, seconds: elapsed + dt });
     }
     return samples;
 }

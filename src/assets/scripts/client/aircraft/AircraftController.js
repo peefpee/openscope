@@ -343,7 +343,18 @@ export default class AircraftController {
      */
     aircraft_remove(aircraftModel) {
         const airport = AirportController.current;
-        if (airport && airport.towerController) airport.towerController.removeArrival(aircraftModel.id);
+        if (airport && airport.towerController) {
+            airport.towerController.removeArrival(aircraftModel.id);
+            if (airport.towerController._departures) {
+                airport.towerController._departures.delete(aircraftModel.id);
+            }
+        }
+        if (airport && airport.centreController && airport.centreController._aircraft) {
+            airport.centreController._aircraft.delete(aircraftModel.id);
+        }
+        aircraftModel.conflictProjection = null;
+        aircraftModel.predictedEntry = null;
+        aircraftModel.octaGuidance = null;
         AirportController.removeAircraftFromAllRunwayQueues(aircraftModel);
         this.removeFlightNumberFromList(aircraftModel);
         this.removeAircraftModelFromList(aircraftModel);
@@ -900,6 +911,10 @@ export default class AircraftController {
      * @private
      */
     _shouldAddNewConflict(aircraftModel, comparisonAircraftModel) {
+        if (abs(aircraftModel.altitude - comparisonAircraftModel.altitude) > 5000 &&
+            aircraftModel.trend === 0 && comparisonAircraftModel.trend === 0) {
+            return false;
+        }
         const boundingBoxLength = conflictRange(aircraftModel, comparisonAircraftModel, km(8));
         const dx = abs(aircraftModel.relativePosition[0] - comparisonAircraftModel.relativePosition[0]);
         const dy = abs(aircraftModel.relativePosition[1] - comparisonAircraftModel.relativePosition[1]);
