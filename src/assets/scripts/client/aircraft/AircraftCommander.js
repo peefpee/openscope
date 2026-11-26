@@ -3,6 +3,7 @@ import _isNil from 'lodash/isNil';
 import _map from 'lodash/map';
 import _round from 'lodash/round';
 import { clearOrbit } from './Pilot/VfrArrival';
+import ClearanceStateManager from './ClearanceStateManager';
 import TimeKeeper from '../engine/TimeKeeper';
 import AirportController from '../airport/AirportController';
 import EventBus from '../lib/EventBus';
@@ -459,7 +460,11 @@ export default class AircraftCommander {
             return [false, readback];
         }
 
-        return aircraft.pilot.updateStarLegForArrivalRunway(aircraft, runwayModel);
+        const result = aircraft.pilot.updateStarLegForArrivalRunway(aircraft, runwayModel);
+        if (result && result[0]) {
+            ClearanceStateManager.onArrivalRunwayChanged(aircraft, runwayModel);
+        }
+        return result;
     }
 
     /**
@@ -1211,22 +1216,35 @@ export default class AircraftCommander {
         return this._handoffToCentre(aircraft, airport, freq, { legacyReadback: true });
     }
 
-    runClearEntry(aircraft) {
+    runClearEntry(aircraft, data = []) {
         const airport = AirportController.current;
-        if (!/^Y/i.test(airport.icao) || aircraft.rules !== 'vfr' || aircraft.isOnGround()) {
+        if (!airport || !/^Y/i.test(airport.icao) || aircraft.rules !== 'vfr' || aircraft.isOnGround()) {
             return [false, 'airborne Australian VFR only'];
         }
-        aircraft.entryClearance = {
-            airport: airport.icao,
-            issuer: aircraft.controllerState.currentController,
-            issued: TimeKeeper.accumulatedDeltaTime,
-            ceiling: airport.ctr_ceiling
-        };
-        aircraft.controllerState.airspaceEntryCleared = true;
-        aircraft.octaRequired = false;
-        aircraft.octaGuidance = null;
-        aircraft.predictedEntry = null;
-        return [true, 'cleared to enter controlled airspace'];
+        const options = {};
+        for (const rawArg of data) {
+            if (rawArg == null || rawArg === '') continue;
+            const token = String(rawArg).trim();
+            if (/^\d+$/.test(token)) {
+                const parsedAlt = Number(token);
+                const feet = parsedAlt <= 999 ? parsedAlt * 100 : parsedAlt;
+                options.maxAltitude = Math.min(airport.ctr_ceiling, Math.max(airport.elevation, feet));
+            } else {
+                options.sector = token.toUpperCase();
+                options.regions = [token.toUpperCase()];
+            }
+        }
+        const clearance = ClearanceStateManager.grantEntryClearance(aircraft, airport, options);
+        const parts = ['cleared to enter'];
+        if (clearance.sector) {
+            parts.push(`${clearance.sector} controlled airspace`);
+        } else {
+            parts.push('controlled airspace');
+        }
+        if (options.maxAltitude != null) {
+            parts.push(`not above ${options.maxAltitude}`);
+        }
+        return [true, parts.join(' ')];
     }
 
     runOcta(aircraft) {
@@ -1249,10 +1267,7 @@ export default class AircraftCommander {
             aircraft.target.turn = null;
             aircraft.vfrOrbit = orbit;
         }
-        aircraft.octaRequired = true;
-        aircraft.nextOctaCheck = 0;
-        aircraft.entryClearance = null;
-        aircraft.controllerState.airspaceEntryCleared = false;
+        ClearanceStateManager.setOctaRequired(aircraft, true);
         return [true, 'remaining outside controlled airspace'];
     }
 
@@ -1278,12 +1293,15 @@ export default class AircraftCommander {
         if (!aircraft.pilot.hasApproachClearance || !runway || (name && name.toUpperCase() !== runway.name)) {
             return [false, 'request approach or circuit clearance to the assigned runway first'];
         }
-        if (aircraft.rules === 'vfr' && !aircraft.entryClearance) return [false, 'request controlled airspace entry first'];
-        aircraft.landingClearance = {
-            runway: runway.name,
-            issuer: aircraft.controllerState.currentController,
-            issued: TimeKeeper.accumulatedDeltaTime
-        };
+        const [issued, result] = ClearanceStateManager.issueLandingClearance(
+            aircraft,
+            runway,
+            aircraft.controllerState.currentController,
+            TimeKeeper.accumulatedDeltaTime
+        );
+        if (!issued) {
+            return [false, result];
+        }
         return [true, `cleared to land runway ${runway.name}`];
     }
 

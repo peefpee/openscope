@@ -14,6 +14,7 @@ import {
     zeroArgumentsValidator,
     singleArgumentValidator,
     zeroOrOneArgumentValidator,
+    zeroToTwoArgumentsValidator,
     altitudeValidator,
     fixValidator,
     headingValidator,
@@ -242,7 +243,7 @@ const CUSTOM_ARG_AIRCRAFT_COMMANDS = {
         validate: altitudeValidator,
         parse: altitudeParser
     },
-    clearentry: { validate: zeroArgumentsValidator, parse: noop },
+    clearentry: { validate: zeroToTwoArgumentsValidator, parse: noop },
     octa: { validate: zeroArgumentsValidator, parse: noop },
     dw: { validate: circuitJoinValidator, parse: noop },
     xw: { validate: circuitJoinValidator, parse: noop },

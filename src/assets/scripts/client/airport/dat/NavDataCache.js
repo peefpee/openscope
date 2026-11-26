@@ -28,6 +28,18 @@ export class NavDataCache {
         return this.ready;
     }
 
+    getCompatibleRecord(key, { icao, airac } = {}) {
+        const record = this.records.get(key);
+        if (!record) return null;
+        if (icao && record.icao && String(record.icao).toUpperCase() !== String(icao).toUpperCase()) {
+            return null;
+        }
+        if (airac && record.airac && String(record.airac) !== String(airac)) {
+            return null;
+        }
+        return record;
+    }
+
     save(record) {
         return this.load().then(() => {
             this.records.set(record.key, record);

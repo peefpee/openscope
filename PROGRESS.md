@@ -17,10 +17,10 @@
 | --- | --- | --- | --- |
 | A.1 | Repository audit, baseline, and `PROGRESS.md` | Verified | Baseline recorded above |
 | A.2 | Node.js / test / build / lint / validator / CI infrastructure | Verified | `package.json` `test` switched to `ava --concurrency=5` (`test:coverage` preserved), `.nvmrc` set to `24.12.0`, `validator:yssy` added, GitHub Actions updated to Node 24, `README.md` updated. Verified `npm test` (1,420 passed), `npm run build`, `npm run validator:yssy`. |
-| B.1 | Centralised aircraft clearance-state consistency (2.3) | Pending | |
-| B.2 | OCTA navigation and controlled-airspace protection (2.1) | Pending | |
-| B.3 | Airspace-specific entry clearances (2.2) | Pending | |
-| B.4 | Airspace importing and data integrity (6) | Pending | |
+| B.1 | Centralised aircraft clearance-state consistency (2.3) | Verified | Created `ClearanceStateManager.js` and wired into `AircraftModel`, `Pilot`, `AircraftCommander`, and `TowerController`. Prevents contradictory entry/OCTA/approach/landing/runway-change/go-around states. |
+| B.2 | OCTA navigation and controlled-airspace protection (2.1) | Verified | Updated `Trajectory.js`, `VfrArrival.js`, and `Pilot.js` with hysteresis to prevent heading oscillation, vertical buffer checks, safe shelf-leveling, `evaluateOctaCommand()` for unable heading responses, 16-angle `clearOrbit` with entry-arc check, and `octaStatus` state tracking. |
+| B.3 | Airspace-specific entry clearances (2.2) | Verified | Updated `AirspaceIndex.js`, `ClearanceStateManager.js`, `AircraftCommander.js`, `argumentValidators.js`, and `aircraftCommandDefinitions.js` to support scoped `clearentry [sector] [maxAlt]`, Class A/E/P/R rules, CTR/CTA/TMA classification, and revoked/superseded status checks. |
+| B.4 | Airspace importing and data integrity (6) | Verified | Updated `parseOpenAir.js`, `australianAirspace.js`, and `NavDataCache.js` with detailed import diagnostics (`accepted`, `rejected`, `missingAltitudes`, `invalidGeometries`, `unsupportedRecords`, `coverageLimitations`), `airspaceDiagnostics` fallback tracking, and `getCompatibleRecord()`. |
 | C.1 | Automated Tower arrival sequencing (3.1) | Pending | |
 | C.2 | Improve Tower handoffs (3.2) | Pending | |
 | C.3 | Departure sequencing (3.3) | Pending | |

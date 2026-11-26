@@ -5,6 +5,8 @@ import _isNil from 'lodash/isNil';
 import AirportController from '../../airport/AirportController';
 import { circuitPoints } from './VfrArrival';
 import { ApproachGuidance, planApproach } from './ApproachGuidance';
+import { evaluateOctaCommand } from './Trajectory';
+import ClearanceStateManager from '../ClearanceStateManager';
 import Fms from '../FlightManagementSystem/Fms';
 import ModeController from '../ModeControl/ModeController';
 import NavigationLibrary from '../../navigationLibrary/NavigationLibrary';
@@ -150,6 +152,12 @@ export default class Pilot {
             clampedAltitude += 1;
         }
 
+        const octaCheck = evaluateOctaCommand(aircraftModel, airportModel, { altitude: clampedAltitude });
+        if (!octaCheck.allowed) {
+            aircraftModel.octaStatus = 'unable';
+            return [false, octaCheck.reason];
+        }
+
         this.cancelApproachClearance(aircraftModel);
         this._mcp.setAltitudeFieldValue(clampedAltitude);
         this._mcp.setAltitudeHold();
@@ -201,6 +209,13 @@ export default class Pilot {
             if (direction === 'right') {
                 correctedHeading = radians_normalize(aircraftModel.heading + nextHeadingInRadians);
             }
+        }
+
+        const airportModel = AirportController.airport_get();
+        const octaCheck = evaluateOctaCommand(aircraftModel, airportModel, { heading: correctedHeading });
+        if (!octaCheck.allowed) {
+            aircraftModel.octaStatus = 'unable';
+            return [false, octaCheck.reason];
         }
 
         this.cancelApproachClearance(aircraftModel);
@@ -402,11 +417,8 @@ export default class Pilot {
         this._mcp.setHeadingHold();
         this._mcp.setSpeedHold();
 
-        aircraftModel.circuitClearance = null;
-        aircraftModel.landingClearance = null;
         if (this.approachGuidance) aircraftModel.setFlightPhase(FLIGHT_PHASE.DESCENT);
-        this.hasApproachClearance = false;
-        this.approachGuidance = null;
+        ClearanceStateManager.cancelApproachClearance(aircraftModel);
 
         const readback = 'cancel approach clearance, fly present heading, ' +
             'maintain last assigned altitude and speed';
@@ -802,9 +814,7 @@ export default class Pilot {
         }
 
         this.cancelHoldingPattern();
-        aircraft.landingClearance = null;
-        aircraft.circuitClearance = null;
-        aircraft.circuitPhase = null;
+        ClearanceStateManager.cancelApproachClearance(aircraft);
         this._fms.setArrivalRunway(runway);
         this._interceptCourse(runway.positionModel, runway.angle);
         this._interceptGlidepath(runway.positionModel, runway.angle, runway.ils.glideslopeGradient);

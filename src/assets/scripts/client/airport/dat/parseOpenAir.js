@@ -148,6 +148,9 @@ function prepareImport(text) {
     const warnings = new Set();
     const seen = new Set();
     let rejected = 0;
+    let unsupportedRecords = 0;
+    let missingAltitudes = 0;
+    let invalidGeometries = 0;
     const lines = text.split(/\r?\n/).map((line) => line.split('*')[0].trim()).filter(Boolean);
     const blocks = [];
     for (const line of lines) {
@@ -156,7 +159,9 @@ function prepareImport(text) {
     }
     function parse(block) {
         try {
+            const prevWarnings = warnings.size;
             const region = parseBlock(block, warnings);
+            if (warnings.size > prevWarnings) unsupportedRecords += warnings.size - prevWarnings;
             if (!region) return;
             const key = JSON.stringify(region);
             if (seen.has(key)) throw new Error('Duplicate region');
@@ -164,13 +169,23 @@ function prepareImport(text) {
             regions.push(region);
         } catch (error) {
             rejected += 1;
+            if (/Missing altitude|Invalid altitude/i.test(error.message)) missingAltitudes += 1;
+            if (/polygon|arc|coordinate/i.test(error.message)) invalidGeometries += 1;
             warnings.add(`${block.find((line) => /^AN\s/i.test(line)) || block[0]} — ${error.message}`);
         }
     }
     function finish() {
         if (!regions.length) throw new Error(['No valid Australian airspace regions.', ...warnings].join(' '));
         return {
-            regions, rejected, warnings: [...warnings], approximated: regions.filter((region) => region.approximated).length
+            regions,
+            accepted: regions.length,
+            rejected,
+            unsupportedRecords,
+            missingAltitudes,
+            invalidGeometries,
+            coverageLimitations: rejected > 0 || missingAltitudes > 0 || invalidGeometries > 0,
+            warnings: [...warnings],
+            approximated: regions.filter((region) => region.approximated).length
         };
     }
     return { blocks, parse, finish };

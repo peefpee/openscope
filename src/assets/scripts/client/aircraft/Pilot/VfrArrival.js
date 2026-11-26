@@ -20,12 +20,20 @@ export function clearOrbit(airport, position, altitude, speed = 105, bankAngle =
     const wind = airport.getWindAtAltitude(altitude).speed || 0;
     const radius = Math.max(0.45, calcTurnRadiusByBankAngle(speed + wind, Math.min(40, Math.max(5, bankAngle)) * Math.PI / 180), (speed + wind) / 188.5);
     const buffer = (airport.data.vfrOptions || {}).bufferNM;
-    for (let i = 0; i < 8; i++) {
-        const center = point(position, i * TAU / 8, radius);
+    const marginRadius = radius + (buffer == null ? 0.25 : buffer);
+    for (let i = 0; i < 16; i++) {
+        const bearing = i * TAU / 16;
+        const center = point(position, bearing, radius);
+        const tangentBearing = bearing + Math.PI + Math.PI / 2;
+        const entryArc = [
+            position.relativePosition,
+            point(center, bearing + Math.PI + Math.PI / 4, radius).relativePosition,
+            point(center, tangentBearing, radius).relativePosition
+        ];
         const ring = Array.from({ length: 25 }, (_, j) => point(center, TAU * j / 24, radius).relativePosition);
-        const margin = Array.from({ length: 25 }, (_, j) => point(center, TAU * j / 24, radius + (buffer == null ? 0.25 : buffer)).relativePosition);
+        const margin = Array.from({ length: 25 }, (_, j) => point(center, TAU * j / 24, marginRadius).relativePosition);
         if (safeRoute(airport, [center.relativePosition], altitude) &&
-            safeRoute(airport, [position.relativePosition, ...ring, ...margin], altitude)) return { center, altitude, radius };
+            safeRoute(airport, [...entryArc, ...ring, ...margin], altitude)) return { center, altitude, radius };
     }
     return null;
 }

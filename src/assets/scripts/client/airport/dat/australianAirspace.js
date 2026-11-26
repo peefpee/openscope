@@ -11,7 +11,9 @@ export function australianShelves(airport, data) {
     const center = airport.positionModel;
     const { elevation } = center;
     const top = airport.ctr_ceiling;
-    const record = navData.records.get('au-airspace');
+    const record = typeof navData.getCompatibleRecord === 'function' ?
+        navData.getCompatibleRecord('au-airspace', { icao: airport.icao }) :
+        navData.records.get('au-airspace');
     const models = [];
     const groundAt = (position) => airport.terrainElevationAt(position);
     for (const region of (record && record.regions) || []) {
@@ -43,7 +45,16 @@ export function australianShelves(airport, data) {
     // A successfully parsed file conveys no regional completeness guarantee. Fill gaps
     // unless the airport explicitly declares complete coverage. At a point, an imported
     // class (including G) wins over the underlying manual or simulated shelf.
-    if (models.length && data.airspaceCoverage === 'complete' && !record.rejected) return models;
+    const importedCount = models.length;
+    if (models.length && data.airspaceCoverage === 'complete' && !record.rejected) {
+        airport.airspaceDiagnostics = {
+            importedCount,
+            rejected: (record && record.rejected) || 0,
+            fallbackActive: false,
+            coverageStatus: 'complete'
+        };
+        return models;
+    }
     for (const area of data.restricted || []) {
         const zone = new AirspaceModel({ ...area, floor: 0, ceiling: 0 }, center, airport.magneticNorth);
         zone.type = area.type || 'R';
@@ -85,5 +96,11 @@ export function australianShelves(airport, data) {
             [ring(nm(airport.ctr_radius))];
         sectors.forEach((poly) => models.push(simulated(poly, 'CTA', shelfBase, top)));
     }
+    airport.airspaceDiagnostics = {
+        importedCount,
+        rejected: (record && record.rejected) || 0,
+        fallbackActive: models.some((m) => m.source === 'simulated'),
+        coverageStatus: importedCount > 0 ? 'partial' : 'fallback'
+    };
     return models;
 }

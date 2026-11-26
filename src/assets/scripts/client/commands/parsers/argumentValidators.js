@@ -49,6 +49,12 @@ export const zeroOrOneArgumentValidator = (args = []) => {
     }
 };
 
+export const zeroToTwoArgumentsValidator = (args = []) => {
+    if (args.length > 2) {
+        return ERROR_MESSAGE.ONE_OR_TWO_ARG_LENGTH;
+    }
+};
+
 /**
  * Checks that `args` has exactly one or two values
  *

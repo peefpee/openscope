@@ -1,5 +1,6 @@
 import TimeKeeper from '../engine/TimeKeeper';
 import EventBus from '../lib/EventBus';
+import ClearanceStateManager from '../aircraft/ClearanceStateManager';
 import { AIRCRAFT_EVENT } from '../constants/eventNames';
 import {
     CONTROLLER_TYPE,
@@ -327,12 +328,7 @@ export default class TowerController {
         }
 
         this._handoffThresholdTriggered.delete(aircraft.id);
-        aircraft.landingClearance = null;
-        aircraft.circuitClearance = null;
-        aircraft.circuitPhase = 'GO AROUND';
-        // Cancel the approach
-        aircraft.pilot.hasApproachClearance = false;
-        aircraft.pilot.approachGuidance = null;
+        ClearanceStateManager.onGoAround(aircraft);
 
         // Set up missed approach altitude
         const runwayModel = aircraft.fms.arrivalRunwayModel;

@@ -11,6 +11,7 @@ import _uniqueId from 'lodash/uniqueId';
 /* global prop */
 import { orbitTrack } from './Pilot/VfrArrival';
 import { enforceOcta, turnRate } from './Pilot/Trajectory';
+import ClearanceStateManager from './ClearanceStateManager';
 import AirportController from '../airport/AirportController';
 import NavigationLibrary from '../navigationLibrary/NavigationLibrary';
 import Fms from './FlightManagementSystem/Fms';
@@ -386,6 +387,7 @@ export default class AircraftModel {
         this.rules = options.rules || FLIGHT_RULES.IFR;
         this.vfrOrbit = options.orbit || null;
         this.octaRequired = Boolean(options.orbit);
+        this.octaStatus = 'normal';
         this.entryClearance = null;
         this.takeoffClearance = null;
         this.landingClearance = null;
@@ -1035,9 +1037,7 @@ export default class AircraftModel {
             return;
         }
 
-        this.landingClearance = null;
-        this.circuitClearance = null;
-        this.circuitPhase = 'GO AROUND';
+        ClearanceStateManager.onGoAround(this);
         const missedApproachAltitude = _ceil(this.fms.arrivalRunwayModel.elevation + 2000, -3);
         const nextIfrAltitudeBelow = _floor(this.altitude, -3);
         let nextAltitudeToMaintain = missedApproachAltitude;
@@ -1047,9 +1047,6 @@ export default class AircraftModel {
             nextAltitudeToMaintain = nextIfrAltitudeBelow;
             radioMessage = `going missed approach, present heading, leveling at ${nextIfrAltitudeBelow}`;
         }
-
-        this.pilot.hasApproachClearance = false;
-        this.pilot.approachGuidance = null;
 
         this.mcp.setAltitudeFieldValue(nextAltitudeToMaintain);
         this.mcp.setAltitudeHold();

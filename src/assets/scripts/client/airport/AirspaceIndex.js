@@ -114,6 +114,29 @@ export default class AirspaceIndex {
     }
 }
 
+export function classifyAirspaceCategory(area) {
+    if (!area) return 'G';
+    if (area.type === 'P') return 'PROHIBITED';
+    if (area.type === 'R') return 'RESTRICTED';
+    if (area.type === 'Q') return 'DANGER';
+    if (area.type === 'CTR' || /\bCTR\b/i.test(area.name || '')) return 'CTR';
+    if (area.type === 'TMA' || /\bTMA\b/i.test(area.name || '')) return 'TMA';
+    if (area.type === 'CTA' || /\bCTA\b/i.test(area.name || '')) return 'CTA';
+    if (controlled(area)) return 'CTA';
+    return 'G';
+}
+
+export function isLocalControlledRegion(area, airport) {
+    if (!area || !airport) return false;
+    if (area.source === 'simulated') return true;
+    if (typeof area.isPointInside2D === 'function' && area.isPointInside2D([0, 0])) return true;
+    if (typeof area.distanceToBoundary === 'function') {
+        const radiusNM = Math.max(15, (airport.ctr_radius || 0) / 1.852);
+        return area.distanceToBoundary([0, 0]) <= radiusNM + 10;
+    }
+    return true;
+}
+
 export function authorised(aircraft, area, airport, altitude = aircraft.altitude) {
     if (area.type === 'P' || area.type === 'R') return false;
     if (!controlled(area)) return true;
@@ -121,8 +144,29 @@ export function authorised(aircraft, area, airport, altitude = aircraft.altitude
     if (area.airspace_class === 'A') return false;
     if (area.airspace_class === 'E' && !aircraft.octaRequired) return true;
     const clearance = aircraft.entryClearance;
-    if (aircraft.circuitClearance && airport.controllerConfig && airport.controllerConfig.tower.length &&
-        aircraft.controllerState.currentController !== 'TWR') return false;
-    return Boolean(clearance && clearance.airport === airport.icao && !aircraft.octaRequired &&
-        (altitude == null || altitude <= clearance.ceiling));
+    if (!clearance || clearance.valid === false || (clearance.status && clearance.status !== 'active')) return false;
+    if (aircraft.octaRequired || clearance.airport !== airport.icao) return false;
+    if (Array.isArray(clearance.airspaceClasses) && area.airspace_class &&
+        !clearance.airspaceClasses.includes(area.airspace_class)) {
+        return false;
+    }
+    if (Array.isArray(clearance.regions) && clearance.regions.length > 0) {
+        const regionName = (area.name || '').toUpperCase();
+        const regionType = (area.type || '').toUpperCase();
+        const matchesRegion = clearance.regions.some((r) => {
+            const token = String(r).toUpperCase();
+            return regionName.includes(token) || regionType === token;
+        });
+        if (!matchesRegion) return false;
+    } else if (clearance.sector) {
+        const sectorToken = String(clearance.sector).toUpperCase();
+        const regionName = (area.name || '').toUpperCase();
+        if (!regionName.includes(sectorToken)) return false;
+    } else if (!isLocalControlledRegion(area, airport)) {
+        return false;
+    }
+    const maxAlt = clearance.maxAltitude != null ? clearance.maxAltitude : clearance.ceiling;
+    const minAlt = clearance.minAltitude != null ? clearance.minAltitude : -Infinity;
+    if (altitude != null && (altitude > maxAlt || altitude < minAlt)) return false;
+    return true;
 }
