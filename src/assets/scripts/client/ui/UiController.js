@@ -641,7 +641,16 @@ class UiController {
 
         const adjacentFrequencies = controllerConfig.getAdjacentFrequencyList();
 
-        adjacentFrequencies.forEach(({ callsign, frequency, radioName }) => {
+        if (controllerConfig.approach && controllerConfig.approach.frequency) {
+            const $active = $('<li class="frequency-panel-row is-active"></li>');
+            $active.text(`* ${controllerConfig.approach.callsign} ${controllerConfig.approach.frequency}`);
+            if (controllerConfig.approach.radioName) {
+                $active.prop('title', `${controllerConfig.approach.radioName} (Active)`);
+            }
+            $list.append($active);
+        }
+
+        adjacentFrequencies.forEach(({ callsign, frequency, radioName, type }) => {
             const $row = $('<li class="frequency-panel-row"></li>');
 
             $row.text(`${callsign} ${frequency}`);
@@ -649,6 +658,15 @@ class UiController {
             if (radioName) {
                 $row.prop('title', radioName);
             }
+
+            $row.on('click', () => {
+                const targetType = type === 'ctr' || /CTR/i.test(callsign) ? 'ctr' : 'twr';
+                const $cmd = $('#command');
+                if (!$cmd.length) return;
+                const current = String($cmd.val() || '').trim();
+                const prefix = current ? `${current.split(/\s+/)[0]} ` : '';
+                $cmd.val(`${prefix}contact ${targetType} ${frequency}`).trigger('focus');
+            });
 
             $list.append($row);
         });

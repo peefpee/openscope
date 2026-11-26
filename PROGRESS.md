@@ -28,9 +28,9 @@
 | D.1 | Unified trajectory prediction (4.1) | Verified | Extended `Trajectory.js` `trajectory()` to support speed acceleration/deceleration, FMS/LNAV waypoints, VORLOC/ILS glideslope, VFR orbits, and approach/missed-approach guidance without mutating live aircraft state. |
 | D.2 | Conflict detection and Australian separation (4.2) | Verified | Updated `AircraftConflict.js` with cache-key invalidation in `projectedPath()`, Super (`J`) & Heavy (`H`) wake turbulence conflicts, `airspaceInfringement`, and `restrictedAirspaceInfringement` detection without duplicate scoring events. |
 | D.3 | Performance profiling and optimisation (9) | Verified | Added vertical candidate filtering in `AircraftController._shouldAddNewConflict()`, prediction cache invalidation, and full resource/listener/projection cleanup in `AircraftController.aircraft_remove()`. |
-| E.1 | Reporting point selection (5.1) | Pending | |
-| E.2 | Circuit navigation & VFR traffic management (5.2, 5.3) | Pending | |
-| E.3 | Australian phraseology (7) | Pending | |
-| E.4 | Radar interface: frequency panel, data blocks, keyboard controls (8) | Pending | |
+| E.1 | Reporting point selection (5.1) | Verified | Updated `VfrArrival.js` `vfrEntry()` with terrain clearance, congestion/proximity filtering against active traffic, and bearing-and-distance fallback when all reporting points are blocked. |
+| E.2 | Circuit navigation & VFR traffic management (5.2, 5.3) | Verified | Passed active traffic to `vfrEntry` in `AircraftController.createVfrArrival()`, added `octa`, `dw`, `xw`, `base`, `final` to `assets/autocomplete/commandAutocompleteConfig.json`. |
+| E.3 | Australian phraseology (7) | Verified | Verified centralised `radioUtilities.js` & `speech.js` (`ControllerSpokenText.spec.js`), plus Australian unable-heading/clearance/missed-approach readbacks. |
+| E.4 | Radar interface: frequency panel, data blocks, keyboard controls (8) | Verified | Added active controller indicator and click-to-compose handoff in `UiController._updateFrequencyPanel()`, compact status badges (`VFR`, controller, `HO`/`OVD`, `OCTA`, `INF`/`PINF`, `GA`, `CONF`/`PCONF`) in `CanvasController._drawSingleAircraftDataBlock()`, verified `ScopeControls.spec.js`. |
 | F.1 | Required integration scenarios (10.1–24) | Pending | |
 | F.2 | Final validation, benchmarks, and documentation | Pending | |

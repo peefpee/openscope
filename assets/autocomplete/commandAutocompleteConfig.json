@@ -219,6 +219,105 @@
       ]
     },
     {
+      "id": "octa",
+      "variants": [
+        {
+          "aliases": [
+            "octa"
+          ],
+          "altkeys": [
+            "outside controlled airspace"
+          ],
+          "explain": "remain outside controlled airspace"
+        }
+      ],
+      "paramsets": []
+    },
+    {
+      "id": "dw",
+      "variants": [
+        {
+          "aliases": [
+            "dw"
+          ],
+          "altkeys": [
+            "downwind"
+          ],
+          "explain": "join downwind for <u>runway</u> [l/r]"
+        }
+      ],
+      "paramsets": [
+        {
+          "example": "34L",
+          "explain": "join downwind for <u>runway</u>",
+          "candidate": "^[0-9]{1,2}[lcr]?([ ][lr])?$",
+          "validate": "^([0-9]{1,2}[lcr]?)(?:[ ]([lr]))?$"
+        }
+      ]
+    },
+    {
+      "id": "xw",
+      "variants": [
+        {
+          "aliases": [
+            "xw"
+          ],
+          "altkeys": [
+            "crosswind"
+          ],
+          "explain": "join crosswind for <u>runway</u> [l/r]"
+        }
+      ],
+      "paramsets": [
+        {
+          "example": "34L",
+          "explain": "join crosswind for <u>runway</u>",
+          "candidate": "^[0-9]{1,2}[lcr]?([ ][lr])?$",
+          "validate": "^([0-9]{1,2}[lcr]?)(?:[ ]([lr]))?$"
+        }
+      ]
+    },
+    {
+      "id": "base",
+      "variants": [
+        {
+          "aliases": [
+            "base"
+          ],
+          "altkeys": [],
+          "explain": "join base for <u>runway</u> [l/r]"
+        }
+      ],
+      "paramsets": [
+        {
+          "example": "34L",
+          "explain": "join base for <u>runway</u>",
+          "candidate": "^[0-9]{1,2}[lcr]?([ ][lr])?$",
+          "validate": "^([0-9]{1,2}[lcr]?)(?:[ ]([lr]))?$"
+        }
+      ]
+    },
+    {
+      "id": "final",
+      "variants": [
+        {
+          "aliases": [
+            "final"
+          ],
+          "altkeys": [],
+          "explain": "join final for <u>runway</u>"
+        }
+      ],
+      "paramsets": [
+        {
+          "example": "34L",
+          "explain": "join final for <u>runway</u>",
+          "candidate": "^[0-9]{1,2}[lcr]?$",
+          "validate": "^([0-9]{1,2}[lcr]?)$"
+        }
+      ]
+    },
+    {
       "id": "rnav",
       "variants": [
         {

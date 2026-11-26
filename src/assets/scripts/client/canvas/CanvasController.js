@@ -1648,6 +1648,26 @@ export default class CanvasController {
         cc.textAlign = 'left';
         cc.fillText(row1text, -this.theme.DATA_BLOCK.HALF_WIDTH + paddingLR, -gap / 2 - lineheight);
         cc.fillText(row2text, -this.theme.DATA_BLOCK.HALF_WIDTH + paddingLR, gap / 2 + lineheight);
+
+        const tags = [];
+        const cs = aircraftModel.controllerState || {};
+        if (aircraftModel.rules === 'vfr') tags.push('VFR');
+        if (cs.currentController && cs.currentController !== 'NONE') tags.push(cs.currentController);
+        if (cs.handoffState === 'OVERDUE') tags.push('OVD');
+        else if (cs.handoffRequired || cs.handoffState === 'REQUIRED') tags.push('HO');
+        if (aircraftModel.octaRequired) tags.push('OCTA');
+        if (aircraftModel.infringing) tags.push('INF');
+        else if (aircraftModel.predictedEntry) tags.push('PINF');
+        if (aircraftModel.circuitPhase === 'GO AROUND') tags.push('GA');
+        const hasViolation = Object.values(aircraftModel.conflicts || {}).some((c) => c && c.hasViolation && c.hasViolation());
+        const hasPredicted = Object.values(aircraftModel.conflicts || {}).some((c) => c && c.hasConflict && c.hasConflict());
+        if (hasViolation) tags.push('CONF');
+        else if (hasPredicted) tags.push('PCONF');
+        if (tags.length > 0 && aircraftModel.isAustralianOperation && aircraftModel.isAustralianOperation()) {
+            const alert = aircraftModel.infringing || hasViolation || cs.handoffState === 'OVERDUE';
+            cc.fillStyle = alert ? '#ff6b6b' : fillStyle;
+            cc.fillText(tags.join(' '), -this.theme.DATA_BLOCK.HALF_WIDTH + paddingLR, -this.theme.DATA_BLOCK.HALF_HEIGHT - 3);
+        }
         cc.font = BASE_CANVAS_FONT;
 
         cc.restore();

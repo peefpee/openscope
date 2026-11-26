@@ -38,7 +38,15 @@ export function clearOrbit(airport, position, altitude, speed = 105, bankAngle =
     return null;
 }
 
-export function vfrEntry(airport, speed = 105, bankAngle = 20) {
+function isUnsafeProximity(position, altitude, existingTraffic = []) {
+    return existingTraffic.some((other) => {
+        if (!other || other.isOnGround()) return false;
+        const dist = position.distanceToPosition(other.positionModel);
+        return dist < 3 && Math.abs(altitude - other.altitude) < 1000;
+    });
+}
+
+export function vfrEntry(airport, speed = 105, bankAngle = 20, existingTraffic = []) {
     const origin = airport.positionModel;
     const extent = Math.max(12, nm(airport.ctr_radius));
     const altitude = origin.elevation + 1500;
@@ -57,15 +65,19 @@ export function vfrEntry(airport, speed = 105, bankAngle = 20) {
         const bearings = (report.arrivalDirections || []).map((dir) => directions.indexOf(dir))
             .filter((index) => index >= 0).map((index) => index * TAU / 8);
         if (!bearings.length) bearings.push(outward, outward + TAU / 8, outward - TAU / 8);
-        const minimum = report.minimumAltitude == null ? -Infinity : report.minimumAltitude;
+        const terrainMin = airport.terrainElevationAt(fix.relativePosition) + 500;
+        const minimum = Math.max(terrainMin, report.minimumAltitude == null ? -Infinity : report.minimumAltitude);
         const maximum = report.maximumAltitude == null ? Infinity : report.maximumAltitude;
+        if (minimum > maximum) continue;
         const heights = new Set([altitude, altitude - 500, altitude + 500].map((h) => Math.min(maximum, Math.max(minimum, h))));
         for (const height of heights) {
             if ((report.minimumAltitude != null && height < report.minimumAltitude) ||
-                (report.maximumAltitude != null && height > report.maximumAltitude)) continue;
+                (report.maximumAltitude != null && height > report.maximumAltitude) ||
+                height < terrainMin) continue;
             for (const bearing of bearings) {
                 const inbound = point(fix, bearing, 2);
                 const destination = fix.relativePosition;
+                if (isUnsafeProximity(inbound, height, existingTraffic)) continue;
                 if (!safeRoute(airport, [inbound.relativePosition], height)) continue;
                 const clearToPoint = safeRoute(airport, [inbound.relativePosition, destination], height);
                 const orbit = clearOrbit(airport, clearToPoint ? fix : inbound, height, speed, bankAngle);
@@ -77,14 +89,15 @@ export function vfrEntry(airport, speed = 105, bankAngle = 20) {
             }
         }
     }
-    if (reports.length) return null;
     const start = Math.random() * TAU;
     for (let i = 0; i < 96; i++) {
         const bearing = start + i * TAU / 24;
         const distance = Math.round(Math.max(11, extent * [0.45, 0.7, 0.93, 1][Math.floor(i / 24)] + (i >= 72 ? 4 : 0)));
         const gps = origin.generateCoordinatesFromBearingAndDistance(bearing, distance);
         const position = point(new StaticPositionModel(gps, origin, airport.magneticNorth), 0, 0);
-        const orbit = clearOrbit(airport, position, altitude, speed, bankAngle);
+        const safeAlt = Math.max(altitude, airport.terrainElevationAt(position.relativePosition) + 500);
+        if (isUnsafeProximity(position, safeAlt, existingTraffic)) continue;
+        const orbit = clearOrbit(airport, position, safeAlt, speed, bankAngle);
         if (orbit) return { position, orbit, report: `${distance} miles ${compass[Math.round(bearing * 8 / TAU) % 8]} of the field` };
     }
     return null;

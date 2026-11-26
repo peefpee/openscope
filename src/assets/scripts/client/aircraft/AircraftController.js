@@ -609,7 +609,7 @@ export default class AircraftController {
             return;
         }
         const props = this._buildAircraftProps(pattern, false, 'vh/lightGA');
-        const entry = vfrEntry(airport, props.model.speed.cruise, props.model.bankAngle);
+        const entry = vfrEntry(airport, props.model.speed.cruise, props.model.bankAngle, this.aircraft.list);
         if (!entry) return;
         this._createAircraftWithInitializationProps({
             ...props,
