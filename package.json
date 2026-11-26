@@ -3,8 +3,8 @@
   "version": "6.29.0-BETA",
   "description": "An ATC simulator in HTML5",
   "engines": {
-    "node": "11.3.0",
-    "npm": "6.4.0"
+    "node": ">=18.0.0",
+    "npm": ">=8.0.0"
   },
   "scripts": {
     "build": "gulp build --prod",
@@ -13,12 +13,13 @@
     "gulp": "gulp build",
     "lint-diff": "lint-diff",
     "lint": "eslint src/assets/scripts/client/**",
-    "posttest": "npm run report",
     "report": "nyc report --reporter=cobertura --reporter=lcov",
     "server": "npm run start",
     "start": "node public/assets/scripts/server/index.js",
-    "test": "nyc ava --concurrency=5",
-    "validator": "validator -a"
+    "test": "ava --concurrency=5",
+    "test:coverage": "nyc ava --concurrency=5",
+    "validator": "validator -a",
+    "validator:yssy": "validator -a yssy"
   },
   "repository": {
     "type": "git",

@@ -19,7 +19,7 @@ Feel free to [join us on slack](https://join.slack.com/t/openscopeatc/shared_inv
 _Prerequisites: In order to successfully complete this quick start, you will need to have the following installed locally:_
 
 - [Git](https://git-scm.com/downloads)
-- [Node](https://nodejs.org/en/download/)
+- [Node.js](https://nodejs.org/en/download/) (verified with Node v24.12.0; see `.nvmrc`)
 
 _Installation directions are beyond the scope of this document.  Instead, search the [Google](http://google.com).  Installing these two packages has been written about ad-nauseum._
 
@@ -29,7 +29,13 @@ From a terminal (or GitBash for Windows users), run the following commands:
 1. `cd openscope`
 1. `npm install`
 1. `npm run build`
+1. `npm test`
 1. `npm run start`
+
+Additional verification commands:
+
+- `npm run lint` — run ESLint over `src/assets/scripts/client/**`
+- `npm run validator -- <icao>` (or `npm run validator:yssy`) — validate an airport JSON asset after `npm run build`
 
 Once that finishes doing its thing, you should see something close to the following in the terminal:
 
