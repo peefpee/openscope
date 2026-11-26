@@ -307,7 +307,7 @@ Position definition of the airport airspace.  Multiple airspace areas may be def
 
 ### Fixes
 
-The simulator uses `fixes` for IFR traffic and controller clearances. The DAT importer stores nearby visual reporting points in a separate `vfrWaypoints` array for future VFR traffic. Each entry contains its `id`, spoken or printed `name`, owning `airport` (or `ENRT`), ICAO `region`, and decimal-degree `position` as [latitude, longitude]. Identifiers may repeat across regions or owners.
+The simulator uses `fixes` for IFR traffic and controller clearances. The DAT importer stores nearby visual reporting points in a separate `vfrWaypoints` array used by arriving Australian VFR traffic. Each entry contains its `id`, spoken or printed `name`, owning `airport` (or `ENRT`), ICAO `region`, and decimal-degree `position` as [latitude, longitude]. Identifiers may repeat across regions or owners.
 
 All fixes listed within the Standard Routes need to be defined within this section
 
@@ -755,3 +755,13 @@ Altitude records retain their original reference. For AGL limits, the simulator 
 ### Controller radio names
 
 Each entry in the `controllers` block accepts an optional `radioName`. `callsign` remains the compact identifier shown in logs and on the frequency panel; `radioName` is the phrase spoken by the simulated pilot. For example, `SY_APP` has the radio name `Sydney Approach` and `YMMM` has the radio name `Melbourne Centre`. Known Australian facilities are resolved centrally when `radioName` is omitted. DAT imports can set these names from the import dialog.
+
+### Australian traffic, circuit and separation settings
+
+Each `vfrWaypoints` entry can specify `radioName`, `arrivalDirections` (e.g. `["N", "SW"]`), and minimum or maximum altitude in feet AMSL using `minimumAltitude` and `maximumAltitude`. Runway `circuit` accepts a shared object or one per runway end. Available fields include `direction` (left/right), `altitudeAGL`, `downwindOffsetNM`, `downwindExtensionNM`, `baseDistanceNM`, `finalDistanceNM` a `restrictions` list accepting `no-right-circuit` or `no-left-circuit`, and overrides in `categories` keyed by aircraft weight class.
+
+Airport `vfrOptions` defaults to four simultaneous aircraft, a 300-second interval, 90 seconds of trajectory lookahead, a two-second recheck and a 0.25 NM buffer. The keys are `maxAircraft`, `intervalSeconds`, `lookaheadSeconds`, `checkSeconds` and `bufferNM`. Imported airspace takes precedence within its horizontal and vertical limits, including Class G. Explicit `airspaceCoverage: "complete"` suppresses fallback only for a usable import with no rejected regions.
+
+The simulation uses 3 NM lateral and 1,000 ft vertical separation for mandatory pairs, or 5 NM lateral with `separationOptions.surveillance` set to false. Class C includes mixed IFR/VFR pairs. Class D and E use mandatory separation for IFR pairs. Other pairs receive proximity advisories. The default prediction horizon is 60 seconds (`separationOptions.lookaheadSeconds`). Same-runway occupancy and heavy wake checks are simplified. Predictions use current speed, wind and bounded turns. Curves and terrain contours approximate the available data.
+
+Operational references consulted for terminology and radio names include the [CASA Visual Flight Rules Guide](https://www.casa.gov.au/sites/default/files/2022-02/visual-flight-rules-guide-interactive.pdf) and [Airservices Australia AIP Supplement H35/26](https://www.airservicesaustralia.com/aip/current/sup/s26-h35.pdf).

@@ -3,21 +3,49 @@ import CanvasStageModel from '../canvas/CanvasStageModel';
 
 const storageKey = 'openscope-scope-controls-v1';
 const bindings = {
-    north: 'ArrowUp', south: 'ArrowDown', west: 'ArrowLeft', east: 'ArrowRight',
-    zoomIn: 'Equal', zoomOut: 'Minus', centre: 'Home', reset: 'Shift+Home',
+    north: 'ArrowUp',
+    south: 'ArrowDown',
+    west: 'ArrowLeft',
+    east: 'ArrowRight',
+    zoomIn: 'Equal',
+    zoomOut: 'Minus',
+    centre: 'Home',
+    reset: 'Shift+Home',
     centreAircraft: 'Primary+Shift+KeyF'
 };
-const defaults = { ...bindings, fast: 'Shift', precise: 'Alt', editing: 'Off',
-    speed: 350, fastFactor: 2.5, preciseFactor: 0.25, minZoom: 1, maxZoom: 100 };
-const labels = { north: 'Pan north', south: 'Pan south', west: 'Pan west', east: 'Pan east',
-    zoomIn: 'Zoom in', zoomOut: 'Zoom out', centre: 'Centre airport', reset: 'Restore airport view',
-    centreAircraft: 'Centre selected aircraft', fast: 'Fast pan modifier', precise: 'Precise pan modifier',
-    editing: 'Pan while editing commands', speed: 'Pan speed (pixels/s)', fastFactor: 'Fast speed multiplier',
-    preciseFactor: 'Precise speed multiplier', minZoom: 'Minimum zoom', maxZoom: 'Maximum zoom' };
+const defaults = {
+    ...bindings,
+    fast: 'Shift',
+    precise: 'Alt',
+    editing: 'Off',
+    speed: 350,
+    fastFactor: 2.5,
+    preciseFactor: 0.25,
+    minZoom: 1,
+    maxZoom: 100
+};
+const labels = {
+    north: 'Pan north',
+    south: 'Pan south',
+    west: 'Pan west',
+    east: 'Pan east',
+    zoomIn: 'Zoom in',
+    zoomOut: 'Zoom out',
+    centre: 'Centre airport',
+    reset: 'Restore airport view',
+    centreAircraft: 'Centre selected aircraft',
+    fast: 'Fast pan modifier',
+    precise: 'Precise pan modifier',
+    editing: 'Pan while editing commands',
+    speed: 'Pan speed (pixels/s)',
+    fastFactor: 'Fast speed multiplier',
+    preciseFactor: 'Precise speed multiplier',
+    minZoom: 'Minimum zoom',
+    maxZoom: 'Maximum zoom'
+};
 
 function read() {
-    try { return { ...defaults, ...JSON.parse(localStorage.getItem(storageKey)) }; }
-    catch (error) { return { ...defaults }; }
+    try { return { ...defaults, ...JSON.parse(localStorage.getItem(storageKey)) }; } catch (error) { return { ...defaults }; }
 }
 const options = read();
 function save() {
@@ -28,7 +56,14 @@ function chord(event) {
         event.shiftKey ? 'Shift' : '', event.code].filter(Boolean).join('+');
 }
 function modifier(event, key) {
-    return key === 'Shift' ? event.shiftKey : key === 'Alt' ? event.altKey : key === 'Primary' && (event.ctrlKey || event.metaKey);
+    if (key === 'Shift') return event.shiftKey;
+    if (key === 'Alt') return event.altKey;
+    return key === 'Primary' && (event.ctrlKey || event.metaKey);
+}
+
+function panFactor(event) {
+    if (modifier(event, options.precise)) return options.preciseFactor;
+    return modifier(event, options.fast) ? options.fastFactor : 1;
 }
 
 export function controlsSettings() {
@@ -64,8 +99,7 @@ export function controlsSettings() {
             });
         } else {
             field = $('<select>');
-            (key === 'editing' ? ['Off', 'Primary', 'Alt', 'Shift'] : ['Shift', 'Alt', 'Primary']).forEach((name) =>
-                field.append($('<option>').text(name)));
+            (key === 'editing' ? ['Off', 'Primary', 'Alt', 'Shift'] : ['Shift', 'Alt', 'Primary']).forEach((name) => field.append($('<option>').text(name)));
             field.on('change', () => {
                 const value = field.val();
                 if ((key === 'fast' && value === options.precise) || (key === 'precise' && value === options.fast)) {
@@ -113,14 +147,13 @@ export class ScopeControls {
     }
 
     down(event) {
-        const code = event.code;
+        const { code } = event;
         const exact = chord(event);
         this.editingPan = modifier(event, options.editing);
         if (!this.eligible()) return false;
         const panKey = ['north', 'south', 'west', 'east'].find((key) => options[key] === exact ||
             (options[key] === code && (!event.ctrlKey && !event.metaKey || this.editingPan || options.fast === 'Primary' || options.precise === 'Primary')));
-        this.factor = modifier(event, options.precise) ? options.preciseFactor :
-            modifier(event, options.fast) ? options.fastFactor : 1;
+        this.factor = panFactor(event);
         if (panKey) {
             this.held.set(code, panKey);
             if (this.frame === null) this.frame = window.requestAnimationFrame(this.tick);
@@ -148,8 +181,7 @@ export class ScopeControls {
     up(event) {
         this.held.delete(event.code);
         this.editingPan = modifier(event, options.editing);
-        this.factor = modifier(event, options.precise) ? options.preciseFactor :
-            modifier(event, options.fast) ? options.fastFactor : 1;
+        this.factor = panFactor(event);
         if (!this.held.size) this.stop();
     }
 

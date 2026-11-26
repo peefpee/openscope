@@ -142,6 +142,11 @@ const ZERO_ARG_AIRCRAFT_COMMANDS = {
     }
 };
 
+function circuitJoinValidator(args) {
+    if (args.length === 1 || (args.length === 2 && /^[lr]$/.test(args[1]))) return undefined;
+    return 'expected runway and optional circuit direction l/r';
+}
+
 /**
  * System and Aircraft commands that accept a single argument
  *
@@ -239,13 +244,9 @@ const CUSTOM_ARG_AIRCRAFT_COMMANDS = {
     },
     clearentry: { validate: zeroArgumentsValidator, parse: noop },
     octa: { validate: zeroArgumentsValidator, parse: noop },
-    dw: {
-        validate: (args) => (args.length === 1 || (args.length === 2 && /^[lr]$/.test(args[1])) ?
-            undefined : 'expected dw [runway] [l/r]'),
-        parse: noop
-    },
-    xw: { validate: singleArgumentValidator, parse: noop },
-    base: { validate: singleArgumentValidator, parse: noop },
+    dw: { validate: circuitJoinValidator, parse: noop },
+    xw: { validate: circuitJoinValidator, parse: noop },
+    base: { validate: circuitJoinValidator, parse: noop },
     final: { validate: singleArgumentValidator, parse: noop },
     rnav: {
         validate: (args) => (args.length === 2 ? undefined : 'expected rnav [waypoint] [runway]'),

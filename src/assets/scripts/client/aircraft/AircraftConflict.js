@@ -1,6 +1,6 @@
-import { trajectory } from './Pilot/Trajectory';
 import _includes from 'lodash/includes';
 import _filter from 'lodash/filter';
+import { trajectory } from './Pilot/Trajectory';
 import AirportController from '../airport/AirportController';
 import EventBus from '../lib/EventBus';
 import GameController, { GAME_EVENTS } from '../game/GameController';
@@ -15,10 +15,21 @@ import { EVENT } from '../constants/eventNames';
 
 function projectedPath(aircraft, airport, now, seconds) {
     if (!aircraft.conflictProjection || now >= aircraft.conflictProjection.expires) {
-        aircraft.conflictProjection = { expires: now + 4,
-            samples: trajectory(aircraft, airport, seconds, aircraft.targetHeading, aircraft.target.altitude) };
+        aircraft.conflictProjection = {
+            expires: now + 4,
+            samples: trajectory(aircraft, airport, seconds, aircraft.targetHeading, aircraft.target.altitude, !aircraft.octaGuidance)
+        };
     }
     return aircraft.conflictProjection.samples;
+}
+
+export function conflictRange(first, second, legacyRange) {
+    const airport = AirportController.current;
+    if (!airport || !/^Y/i.test(airport.icao)) return legacyRange;
+    const options = airport.data.separationOptions || {};
+    const seconds = Math.min(180, Math.max(6, options.lookaheadSeconds || 60));
+    const closure = (first.groundSpeed || first.speed || 0) + (second.groundSpeed || second.speed || 0);
+    return Math.max(legacyRange, (5 + closure * seconds / 3600) * 1.852);
 }
 
 /**
@@ -172,7 +183,9 @@ export default class AircraftConflict {
                 isWarning
             );
 
-            GameController.events_recordNew(GAME_EVENTS.COLLISION);
+            if (!/^Y/i.test(airport.icao) || this.aircraft.some((ac) => ac.isPlayerControlled())) {
+                GameController.events_recordNew(GAME_EVENTS.COLLISION);
+            }
             this.aircraft[0].hit = true;
             this.aircraft[1].hit = true;
         }
@@ -193,12 +206,16 @@ export default class AircraftConflict {
         const ifr = Number(a.rules !== 'vfr') + Number(b.rules !== 'vfr');
         const mandatory = classes.has('A') || classes.has('B') || (classes.has('C') && ifr > 0) ||
             ((classes.has('D') || classes.has('E')) && ifr === 2);
-        const runway = a.fms.arrivalRunwayModel;
-        const sameRunway = runway && runway === b.fms.arrivalRunwayModel;
-        const heavyPair = a.model.weightClass !== b.model.weightClass && [a,b].some((ac) => ac.model.weightClass === 'H');
+        const assignedRunway = (ac) => (ac.isArrival() ? ac.fms.arrivalRunwayModel : ac.fms.departureRunwayModel);
+        const runway = assignedRunway(a);
+        const otherRunway = assignedRunway(b);
+        const sameRunway = runway && otherRunway &&
+            (runway === otherRunway || runway.name === otherRunway.oppositeName);
+        const heavyPair = a.model.weightClass !== b.model.weightClass && [a, b].some((ac) => ac.model.weightClass === 'H');
         const config = airport.data.separationOptions || {};
         const miles = config.surveillance === false ? 5 : 3;
-        const lateral = (sameRunway && heavyPair ? Math.max(miles, 5) : mandatory ? miles : 1) * 1.852;
+        const standardMiles = mandatory ? miles : 1;
+        const lateral = (sameRunway && heavyPair ? Math.max(miles, 5) : standardMiles) * 1.852;
         const vertical = mandatory ? 1000 : 500;
         const airborne = !a.isOnGround() && !b.isOnGround();
         const runwayConflict = sameRunway && (a.isOnGround() || b.isOnGround()) &&
@@ -374,7 +391,7 @@ export default class AircraftConflict {
     _isOutsideBoundingBox() {
         this._recalculateLateralAndVerticalDistances();
 
-        return this.distance > SEPARATION.MAX_KM;
+        return this.distance > conflictRange(this.aircraft[0], this.aircraft[1], SEPARATION.MAX_KM);
     }
 
     /**

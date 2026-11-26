@@ -121,6 +121,8 @@ function parseBlock(lines, warnings) {
         const type = split[1].toUpperCase();
         const value = split[2].trim();
         if (type === 'AN') region.name = value;
+        else if (type === 'AG') region.controller = value;
+        else if (type === 'AF') region.frequency = value;
         else if (type === 'AL') region.floor = limit(value);
         else if (type === 'AH') region.ceiling = limit(value);
         else if (type === 'DP') region.poly.push(position(value));
@@ -141,7 +143,7 @@ function parseBlock(lines, warnings) {
     return region;
 }
 
-export function readOpenAir(text) {
+function prepareImport(text) {
     const regions = [];
     const warnings = new Set();
     const seen = new Set();
@@ -152,10 +154,10 @@ export function readOpenAir(text) {
         if (/^AC\s/i.test(line)) blocks.push([]);
         if (blocks.length) blocks[blocks.length - 1].push(line);
     }
-    for (const block of blocks) {
+    function parse(block) {
         try {
             const region = parseBlock(block, warnings);
-            if (!region) continue;
+            if (!region) return;
             const key = JSON.stringify(region);
             if (seen.has(key)) throw new Error('Duplicate region');
             seen.add(key);
@@ -165,8 +167,39 @@ export function readOpenAir(text) {
             warnings.add(`${block.find((line) => /^AN\s/i.test(line)) || block[0]} — ${error.message}`);
         }
     }
-    if (!regions.length) throw new Error(['No valid Australian airspace regions.', ...warnings].join(' '));
-    return {
-        regions, rejected, warnings: [...warnings], approximated: regions.filter((region) => region.approximated).length
-    };
+    function finish() {
+        if (!regions.length) throw new Error(['No valid Australian airspace regions.', ...warnings].join(' '));
+        return {
+            regions, rejected, warnings: [...warnings], approximated: regions.filter((region) => region.approximated).length
+        };
+    }
+    return { blocks, parse, finish };
+}
+
+export function readOpenAir(text) {
+    const job = prepareImport(text);
+    job.blocks.forEach(job.parse);
+    return job.finish();
+}
+
+export function importOpenAir(text) {
+    const job = prepareImport(text);
+    let cursor = 0;
+    return new Promise((resolve, reject) => {
+        function processBatch() {
+            try {
+                const deadline = Date.now() + 8;
+                while (cursor < job.blocks.length) {
+                    job.parse(job.blocks[cursor]);
+                    cursor += 1;
+                    if (Date.now() >= deadline) break;
+                }
+                if (cursor < job.blocks.length) setTimeout(processBatch, 0);
+                else resolve(job.finish());
+            } catch (error) {
+                reject(error);
+            }
+        }
+        processBatch();
+    });
 }

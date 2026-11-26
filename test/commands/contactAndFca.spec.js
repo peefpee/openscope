@@ -81,6 +81,14 @@ test.serial('contact twr validates runway assignment, approach eligibility, and 
 
         t.true(ok[0]);
         t.is(ok[1].log, 'contact SY_TWR on 120.500');
+        t.falsy(arrival.landingClearance);
+        const transmission = sinon.stub(arrival, 'radioCall');
+        airport.towerController.updateArrivalHandoff(arrival);
+        t.is(arrival.landingClearance.runway, '16R');
+        t.is(arrival.landingClearance.issuer, CONTROLLER_TYPE.TWR);
+        airport.towerController.updateArrivalHandoff(arrival);
+        t.is(transmission.callCount, 1);
+        transmission.restore();
         t.is(arrival.controllerState.currentController, CONTROLLER_TYPE.TWR);
         t.is(arrival.controllerState.currentFrequency, '120.500');
         t.is(arrival.controllerState.handoffState, HANDOFF_STATE.COMPLETED);

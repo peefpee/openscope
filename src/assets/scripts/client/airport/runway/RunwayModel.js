@@ -206,6 +206,7 @@ export default class RunwayModel extends BaseModel {
     _init(data, end, airportPositionModel) {
         this.airportPositionModel = airportPositionModel;
         this.name = data.name[end];
+        this.oppositeName = data.name[1 - end];
         this.circuit = Array.isArray(data.circuit) ? data.circuit[end] : data.circuit;
 
         // TODO: deprecate

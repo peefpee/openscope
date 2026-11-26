@@ -20,6 +20,7 @@ test.serial('accepts RNAV and visual clearances, preserves a clearance after a b
     const scope = buildDatScope(data, resolveWaypoints(data));
     const airport = new AirportModel(scope);
     airport.data = scope;
+    airport.controllerConfig.tower = []; // Approach provides the simulated landing clearance at this field.
     AirportController.current = airport;
     const runway = airport.getRunway('18');
     const pointOnFinal = (distance) => runway.positionModel.generateCoordinatesFromBearingAndDistance(runway.oppositeAngle, distance);
@@ -35,7 +36,9 @@ test.serial('accepts RNAV and visual clearances, preserves a clearance after a b
     const frameTime = TimeKeeper.getDeltaTimeForGameStateAndTimewarp;
     TimeKeeper.getDeltaTimeForGameStateAndTimewarp = () => 1;
     try {
-        for (const clearance of ['rnav entry 18', 'vis 18', 'vis 36']) {
+        for (const [clearance, permitLanding] of [
+            ['rnav entry 18', true], ['vis 18', true], ['vis 36', true], ['vis 18', false]
+        ]) {
             const aircraft = new AircraftModel({
                 airline: 'jst', callsign: '123', airlineCallsign: 'jetstar', category: 'arrival', origin: '', destination: 'YTES',
                 altitude: 4500, speed: 200, heading: runway.angle,
@@ -54,10 +57,20 @@ test.serial('accepts RNAV and visual clearances, preserves a clearance after a b
             t.true(transmit('h 270')[0]);
             t.is(aircraft.pilot.approachGuidance, null);
             t.true(transmit(clearance)[0]);
-            for (let i = 0; i < 1800 && !aircraft.isOnGround(); i++) {
+            t.falsy(aircraft.landingClearance);
+            const messages = [];
+            aircraft.radioCall = (message) => messages.push(message);
+            if (permitLanding) t.true(transmit('land')[0]);
+            for (let i = 0; i < 1800 && !aircraft.isOnGround() && aircraft.circuitPhase !== 'GO AROUND'; i++) {
                 aircraft.updateFlightPhase();
                 aircraft.updateTarget();
                 aircraft.updatePhysics();
+            }
+            if (!permitLanding) {
+                t.is(aircraft.circuitPhase, 'GO AROUND');
+                t.false(aircraft.isOnGround());
+                t.true(messages.some((message) => message.includes('going missed')));
+                continue;
             }
             t.is(aircraft.flightPhase, 'LANDING');
             t.true(aircraft.isOnGround());

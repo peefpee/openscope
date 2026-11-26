@@ -402,6 +402,8 @@ export default class Pilot {
         this._mcp.setHeadingHold();
         this._mcp.setSpeedHold();
 
+        aircraftModel.circuitClearance = null;
+        aircraftModel.landingClearance = null;
         if (this.approachGuidance) aircraftModel.setFlightPhase(FLIGHT_PHASE.DESCENT);
         this.hasApproachClearance = false;
         this.approachGuidance = null;
@@ -779,6 +781,10 @@ export default class Pilot {
         const runway = airport.getRunway(runwayName.toUpperCase().replace(/^(\d)([LCR]?)$/, '0$1$2'));
         if (leg && (!runway || aircraft.isOnGround())) return [false, 'unable to join that circuit'];
         const right = side ? side === 'r' : Boolean(runway && runway.circuit ? runway.circuit.direction === 'right' : aircraft.rightCircuit);
+        const prohibitedSide = right ? 'no-right-circuit' : 'no-left-circuit';
+        if (leg && runway.circuit && (runway.circuit.restrictions || []).includes(prohibitedSide)) {
+            return [false, 'unable, circuit direction restricted for this runway'];
+        }
         const legName = {
             dw: 'downwind', xw: 'crosswind', base: 'base', final: 'final'
         }[leg];
@@ -796,6 +802,9 @@ export default class Pilot {
         }
 
         this.cancelHoldingPattern();
+        aircraft.landingClearance = null;
+        aircraft.circuitClearance = null;
+        aircraft.circuitPhase = null;
         this._fms.setArrivalRunway(runway);
         this._interceptCourse(runway.positionModel, runway.angle);
         this._interceptGlidepath(runway.positionModel, runway.angle, runway.ils.glideslopeGradient);
@@ -804,8 +813,10 @@ export default class Pilot {
         aircraft.vfrOrbit = null;
         if (leg) {
             aircraft.rightCircuit = right;
-            aircraft.circuitClearance = { runway: runway.name, leg, right, issuer: aircraft.controllerState.currentController };
-            aircraft.circuitPhase = aircraft.octaRequired ? 'AWAITING ENTRY' : 'JOINING ' + legName.toUpperCase();
+            aircraft.circuitClearance = {
+                runway: runway.name, leg, right, issuer: aircraft.controllerState.currentController
+            };
+            aircraft.circuitPhase = aircraft.octaRequired ? 'AWAITING ENTRY' : `JOINING ${legName.toUpperCase()}`;
         }
         aircraft.target.turn = null;
         aircraft.setFlightPhase(FLIGHT_PHASE.DESCENT);

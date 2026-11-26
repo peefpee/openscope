@@ -1,8 +1,8 @@
 /* eslint-disable camelcase, no-mixed-operators, object-shorthand, expected-return */
 import $ from 'jquery';
-import { ScopeControls } from './ui/ScopeControls';
 import _has from 'lodash/has';
 import _includes from 'lodash/includes';
+import { ScopeControls } from './ui/ScopeControls';
 import AirportController from './airport/AirportController';
 import AutocompleteController from './ui/autocomplete/AutocompleteController';
 import CanvasStageModel from './canvas/CanvasStageModel';
@@ -464,7 +464,7 @@ export default class InputController {
         let { code } = event.originalEvent;
         const isEscape = code === KEY_CODES.ESCAPE || code === LEGACY_KEY_CODES.ESCAPE;
 
-        if (this._isDialog(event.target) && !isEscape) {
+        if (!isEscape && (this._isDialog(event.target) || document.querySelector('dialog[open], .dialog.open'))) {
             // ignore input for dialogs
             return;
         }

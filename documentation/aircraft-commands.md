@@ -526,11 +526,15 @@ _Syntax -_ `tutorial`
 
 ### Australian VFR arrivals
 
-Enable **VFR arrivals** in Traffic to start a light GA arrival and schedule further arrivals. The checkbox starts off at each airport. The pilot reports inbound to an available visual reporting point and again overhead. When there is no suitable point, the pilot reports distance and direction from the airport. The aircraft orbits outside controlled airspace until cleared for a visual arrival.
+Enable **VFR arrivals** under Traffic at an Australian airport. The checkbox starts off. Set the maximum number of simultaneous VFR aircraft and the interval in seconds there. A pilot reports the named point on initial contact and reports overhead when reached. A blocked point can produce a hold short of the point or delay the arrival. At airports without reporting points the pilot reports bearing and distance from the field.
 
-- `ABC octa` instructs the pilot to remain outside controlled airspace. The pilot can decline if there is insufficient space to orbit.
-- `ABC dw 12 r` joins right downwind for runway 12. Use `l` for left. The initial default is left, and subsequent joins use the assigned circuit direction.
-- `ABC xw 12`, `ABC base 12` and `ABC final 12` join the corresponding leg and continue to land visually.
-- VFR arrivals decline ILS and RNAV clearances.
+- `ABC octa` requires the aircraft to remain outside controlled airspace. Heading, speed and altitude instructions preserve this restriction. If a climb would enter a shelf, the pilot can level off and resume the assigned climb when clear.
+- `ABC clearentry` clears local controlled-airspace entry. The pilot still avoids prohibited and restricted areas. A circuit or frequency change alone does not grant entry.
+- `ABC dw 12 r` joins right downwind for runway 12. Use `l` for left. A configured runway direction supplies the default. `ABC xw 12`, `ABC base 12` and `ABC final 12` select the other joins. VFR pilots decline ILS and RNAV approaches.
+- For a controlled circuit, issue entry and join instructions, then transfer the aircraft using the tower frequency shown on the scope, for example `ABC contact twr 120.5` when that frequency serves its runway. Tower issues landing clearance separately. At a field configured without Tower, use `ABC land 12` after clearing the approach. Missing landing permission on short final triggers a go-around.
 
-Import X-Plane’s polygon-format `airspaces/airspace.txt` in the **+** dialog and enable **Airspace Depiction** to see the shelves. Where no local definition is available, an imported Australian scope uses a 10 NM Class C surface area and a 2,000 ft AGL shelf out to 40 NM, both extending to the approach ceiling. The simulator uses airport elevation as the AGL reference.
+### Moving the radar view
+
+Click the radar and hold an arrow key to pan at 350 pixels per second. Hold Shift for 2.5× speed or Alt for quarter speed. Diagonals preserve the same speed. Use + or − to zoom, Home to centre the airport, Shift+Home to restore the airport view, and Ctrl+Shift+F (Command+Shift+F on macOS) to centre the selected aircraft. Radar keyboard controls in Settings supports rebinding, speed and zoom limits, and restoring defaults. Command entry and open dialogs retain keyboard focus.
+
+Enable Airspace Depiction and open the Australian airspace layers in the map controls to select classes, special-use types, VFR reporting points or altitude limits. Hover over an area to inspect its source and vertical limits. A highlighted boundary with a time label marks a predicted unauthorised entry.

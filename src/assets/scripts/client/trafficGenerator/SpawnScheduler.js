@@ -1,5 +1,5 @@
-import AirportController from '../airport/AirportController';
 import _forEach from 'lodash/forEach';
+import AirportController from '../airport/AirportController';
 import SpawnPatternCollection from './SpawnPatternCollection';
 import TimeKeeper from '../engine/TimeKeeper';
 import GameController from '../game/GameController';
@@ -53,7 +53,7 @@ class SpawnScheduler {
      * @for SpawnScheduler
      * @method startScheduler
      */
-    setVfrEnabled(enabled) {
+    setVfrEnabled(enabled, spawnImmediately = true) {
         if (this.vfrTimer && GameController.game.timeouts.includes(this.vfrTimer)) GameController.destroyTimer(this.vfrTimer);
         this.vfrEnabled = enabled;
         this.vfrTimer = null;
@@ -62,7 +62,7 @@ class SpawnScheduler {
             const arrival = SpawnPatternCollection.spawnPatternModels.find((pattern) => pattern.isArrival());
             this._aircraftController.createVfrArrival(arrival);
         };
-        spawn();
+        if (spawnImmediately) spawn();
         this.vfrTimer = GameController.game_interval(spawn, Math.max(10, (AirportController.current.data.vfrOptions || {}).intervalSeconds || 300));
     }
 

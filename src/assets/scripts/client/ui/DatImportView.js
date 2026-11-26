@@ -1,6 +1,6 @@
 import $ from 'jquery';
 import navData from '../airport/dat/NavDataCache';
-import { readOpenAir } from '../airport/dat/parseOpenAir';
+import { importOpenAir } from '../airport/dat/parseOpenAir';
 import parseMsaDat from '../airport/dat/parseMsaDat';
 import AirportController from '../airport/AirportController';
 import { parseAirportDat } from '../airport/dat/parseAirportDat';
@@ -136,7 +136,7 @@ export default class DatImportView {
             const cycle = /data cycle (\d{4})/i.exec(text.slice(0, 1024));
             const record = { name: file.name, cycle: cycle ? cycle[1] : '' };
             if (id === 'dat-airspace-file') {
-                return navData.save({ ...record, key: 'au-airspace', ...readOpenAir(text) });
+                return importOpenAir(text).then((result) => navData.save({ ...record, key: 'au-airspace', ...result }));
             }
             if (id === 'dat-airport-file') {
                 const data = parseAirportDat(text, file.name);
@@ -190,6 +190,9 @@ export default class DatImportView {
                 `${airspace.approximated} curved boundaries approximated`;
             const details = section(summary);
             details.append($('<p>').text(`Classes and types: ${classes.join(', ')}. Regional coverage unverified.`));
+            const cycles = [...new Set([...navData.records.values()].map((record) => record.cycle).filter(Boolean))];
+            if (cycles.length > 1) details.append($('<p>').text(`Imported navigation files use different AIRAC cycles: ${cycles.join(', ')}.`));
+            if (!airspace.cycle) details.append($('<p>').text('Airspace AIRAC cycle unknown.'));
             airspace.warnings.forEach((warning) => details.append($('<p>').text(warning)));
             this.$dialog.find('.dat-airspace-source').append(details);
         }

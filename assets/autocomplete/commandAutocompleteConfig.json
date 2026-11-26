@@ -160,7 +160,6 @@
             "ils"
           ],
           "altkeys": [
-            "land",
             "intercept",
             "localizer",
             "glide path",
@@ -877,6 +876,16 @@
           "explain": "<b>f</b>requency <b>c</b>hange <b>a</b>pproved"
         }
       ],
+      "paramsets": []
+    },
+    {
+      "id": "land",
+      "variants": [{ "aliases": ["land"], "altkeys": [], "explain": "clear aircraft to land on its assigned runway" }],
+      "paramsets": [{ "example": "", "candidate": "^(?:[0-9]{0,2}[LCRlcr]?)$", "validate": "^(?:[0-9]{1,2}[LCRlcr]?)?$" }]
+    },
+    {
+      "id": "clearentry",
+      "variants": [{ "aliases": ["clearentry"], "altkeys": ["airspace entry"], "explain": "clear VFR aircraft to enter local controlled airspace" }],
       "paramsets": []
     },
     {

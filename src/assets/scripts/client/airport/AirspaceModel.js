@@ -110,6 +110,10 @@ export default class AirspaceModel extends BaseModel {
         this.floor = convertToThousands(data.floor);
         this.ceiling = convertToThousands(data.ceiling);
         this.airspace_class = data.airspace_class;
+        this.name = data.name;
+        this.type = data.type;
+        this.controller = data.controller;
+        this.restrictions = data.restrictions;
         this.poly = this._buildPolyPositionModels(data.poly, airportPosition, magneticNorth);
         this.relativePoly = _map(this.poly, (v) => v.relativePosition);
         this.bounds = this.relativePoly.reduce(([left, bottom, right, top], [x, y]) => [
@@ -200,7 +204,9 @@ export default class AirspaceModel extends BaseModel {
 
     altitudeLimitsAt(point) {
         if (!this.verticalLimits) return [this.floor, this.ceiling];
-        const { lower, upper, sectorTop, groundAt } = this.verticalLimits;
+        const {
+            lower, upper, sectorTop, groundAt
+        } = this.verticalLimits;
         const ground = lower.agl || upper.agl ? groundAt(point) : 0;
         return [lower.feet + (lower.agl ? ground : 0), Math.min(sectorTop, upper.feet + (upper.agl ? ground : 0))];
     }

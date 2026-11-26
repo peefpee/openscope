@@ -155,6 +155,7 @@ export default class AircraftTypeDefinitionModel extends BaseModel {
         this.category = aircraftTypeDefinition.category;
         this.ceiling = aircraftTypeDefinition.ceiling;
         this.rate = aircraftTypeDefinition.rate;
+        this.bankAngle = aircraftTypeDefinition.bankAngle || 25;
         this.runway = aircraftTypeDefinition.runway;
         this.speed = aircraftTypeDefinition.speed;
         this.capability = aircraftTypeDefinition.capability;

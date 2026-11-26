@@ -11,6 +11,8 @@
 - After reconnecting, verified the working tree still contained the spatial index, predictive guidance, CLEARENTRY command and keyboard controls. Recovered the outstanding reporting-point and circuit edits, and connected Australian map-layer filters, hover inspection and predicted entry highlighting to the scope. Integration checks are running.
 
 
+- Verified the integrated importer, narrow-polygon and vertical crossings, Class G precedence, OCTA climb protection and separate landing permission. The full suite passed 1,418 active tests before adding the keyboard regression. Added a traffic-panel control for arrival rate and aircraft count, and removed the old orbit ground-track override. Updated both the command reference and airport schema.
+
 ## Progress as of 26 November 2026
 
 - **Committed on `develop` through `382fb0c87`.** VFR aircraft can accept direct-to instructions for known fixes. An accepted direct-to or heading instruction cancels the VFR orbit, and an altitude instruction updates its target altitude. The commit also expands regression coverage in `test/aircraft/Pilot/VfrArrival.spec.js`.

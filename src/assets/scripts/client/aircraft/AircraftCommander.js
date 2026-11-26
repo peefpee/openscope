@@ -196,6 +196,7 @@ export default class AircraftCommander {
             return aircraft.pilot.joinApproach(aircraft, data[0], null, command, data[1]);
         }
         const result = this[functionName](aircraft, data);
+        if (result && result[0] && aircraft.rules === FLIGHT_RULES.VFR) aircraft.nextOctaCheck = 0;
         // Successful lateral clearances supersede the approach. Preserve any
         // new LNAV mode selected by the command.
         if (result && result[0] && aircraft.pilot && aircraft.pilot.approachGuidance &&
@@ -947,6 +948,10 @@ export default class AircraftCommander {
             return [false, `unable, Runway ${runwayModel.name} uses ${expectedLabel}`];
         }
 
+        if (aircraft.rules === FLIGHT_RULES.VFR && aircraft.octaRequired && !aircraft.entryClearance) {
+            return [false, 'remaining OCTA, request controlled airspace entry before transfer'];
+        }
+
         if (aircraft.rules !== FLIGHT_RULES.VFR) {
             const eligible = airport.towerController ?
                 airport.towerController.isArrivalEligibleForTowerHandoff(aircraft) :
@@ -976,8 +981,8 @@ export default class AircraftCommander {
         });
 
         if (!aircraft.projected) {
-            if (airport.towerController && airport.towerController._arrivals) {
-                airport.towerController._arrivals.add(aircraft.id);
+            if (airport.towerController && airport.towerController.acceptArrival) {
+                airport.towerController.acceptArrival(aircraft);
             }
 
             EventBus.trigger(AIRCRAFT_EVENT.TOWER_HANDOFF, {
@@ -1232,12 +1237,15 @@ export default class AircraftCommander {
             return [false, 'already inside controlled airspace, request exit instructions'];
         }
         if (!aircraft.vfrOrbit) {
-            const orbit = clearOrbit(AirportController.current, aircraft.positionModel, aircraft.altitude);
-            if (!orbit) return [false, 'unable to remain OCTA from present position'];
+            const orbit = clearOrbit(AirportController.current, aircraft.positionModel, aircraft.altitude, aircraft.trueAirspeed || aircraft.speed, aircraft.model.bankAngle);
             aircraft.pilot.cancelApproachClearance(aircraft);
-            aircraft.mcp.setAltitudeFieldValue(orbit.altitude);
+            aircraft.mcp.setAltitudeFieldValue(aircraft.altitude);
             aircraft.mcp.setAltitudeHold();
-            aircraft.mcp.headingMode = MCP_MODE.HEADING.OFF;
+            if (orbit) aircraft.mcp.headingMode = MCP_MODE.HEADING.OFF;
+            else {
+                aircraft.mcp.setHeadingFieldValue(aircraft.heading);
+                aircraft.mcp.setHeadingHold();
+            }
             aircraft.target.turn = null;
             aircraft.vfrOrbit = orbit;
         }
@@ -1262,8 +1270,21 @@ export default class AircraftCommander {
      * @param aircraft {AircraftModel}
      * @param data {array}
      */
-    runLand() {
-        return [false, 'the "land" command has been deprecated, please use "i" / "ils" instead'];
+    runLand(aircraft, [name] = []) {
+        const airport = AirportController.current;
+        if (!airport || !/^Y/i.test(airport.icao)) return [false, 'use an approach clearance at this airport'];
+        if (airport.controllerConfig && airport.controllerConfig.tower.length) return [false, 'contact tower for landing clearance'];
+        const runway = aircraft.fms.arrivalRunwayModel;
+        if (!aircraft.pilot.hasApproachClearance || !runway || (name && name.toUpperCase() !== runway.name)) {
+            return [false, 'request approach or circuit clearance to the assigned runway first'];
+        }
+        if (aircraft.rules === 'vfr' && !aircraft.entryClearance) return [false, 'request controlled airspace entry first'];
+        aircraft.landingClearance = {
+            runway: runway.name,
+            issuer: aircraft.controllerState.currentController,
+            issued: TimeKeeper.accumulatedDeltaTime
+        };
+        return [true, `cleared to land runway ${runway.name}`];
     }
 
     /**

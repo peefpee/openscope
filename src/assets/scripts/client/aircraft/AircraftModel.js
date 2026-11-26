@@ -387,6 +387,7 @@ export default class AircraftModel {
         this.vfrOrbit = options.orbit || null;
         this.octaRequired = Boolean(options.orbit);
         this.entryClearance = null;
+        this.takeoffClearance = null;
         this.landingClearance = null;
         this.circuitClearance = null;
         this.infringements = [];
@@ -889,7 +890,7 @@ export default class AircraftModel {
      */
     _buildFlightPlanLabel(routeLabel, outbound) {
         if (this.rules === FLIGHT_RULES.VFR) {
-            return this.vfrOrbit ? 'VFR · OCTA' : 'VFR · visual arrival';
+            return ['VFR', this.octaRequired ? 'OCTA' : null, this.circuitPhase || (this.octaRequired ? null : 'visual arrival')].filter(Boolean).join(' · ');
         }
 
         return outbound ? `${routeLabel} · OUT ${outbound.name}` : routeLabel;
@@ -1034,6 +1035,9 @@ export default class AircraftModel {
             return;
         }
 
+        this.landingClearance = null;
+        this.circuitClearance = null;
+        this.circuitPhase = 'GO AROUND';
         const missedApproachAltitude = _ceil(this.fms.arrivalRunwayModel.elevation + 2000, -3);
         const nextIfrAltitudeBelow = _floor(this.altitude, -3);
         let nextAltitudeToMaintain = missedApproachAltitude;
@@ -1052,6 +1056,18 @@ export default class AircraftModel {
         this.mcp.setHeadingFieldValue(this.heading);
         this.mcp.setHeadingHold();
         this.setFlightPhase(FLIGHT_PHASE.DESCENT);
+        const airport = AirportController.current;
+        if (airport && airport.towerController && this.controllerState.currentController === CONTROLLER_TYPE.TWR) {
+            airport.towerController.removeArrival(this.id);
+            this.setControllerState({
+                currentController: CONTROLLER_TYPE.APP,
+                currentFrequency: airport.controllerConfig.approach.frequency,
+                handoffState: HANDOFF_STATE.NONE,
+                handoffRequired: false,
+                targetController: null,
+                targetFrequency: null
+            });
+        }
         this.radioCall(radioMessage, AIRPORT_CONTROL_POSITION_NAME.APPROACH, true);
     }
 
@@ -1574,6 +1590,7 @@ export default class AircraftModel {
         EventBus.trigger(AIRCRAFT_EVENT.TAKEOFF, this, runway);
 
         this.takeoffTime = TimeKeeper.accumulatedDeltaTime;
+        this.takeoffClearance = { runway: runway.name, issued: this.takeoffTime, issuer: this.controllerState.currentController };
         runway.lastDepartedAircraftModel = this;
     }
 
@@ -1628,7 +1645,7 @@ export default class AircraftModel {
             const { reportingPoint } = this.vfrOrbit;
             if (reportingPoint && this.positionModel.distanceToPosition(reportingPoint.position) < 0.35 && !this.projected) {
                 this.radioCall(
-                    `over ${NavigationLibrary.getFixSpokenName(reportingPoint.name)}, ` +
+                    `over ${NavigationLibrary.getFixSpokenName(reportingPoint.radioName || reportingPoint.name)}, ` +
                     `${radio_altitude(this.altitude)}, remaining OCTA`,
                     AIRPORT_CONTROL_POSITION_NAME.APPROACH
                 );
@@ -1872,8 +1889,16 @@ export default class AircraftModel {
                 break;
             }
 
-            case FLIGHT_PHASE.LANDING:
+            case FLIGHT_PHASE.LANDING: {
+                const airport = AirportController.current;
+                const runway = this.fms.arrivalRunwayModel;
+                if (!this.projected && airport && /^Y/i.test(airport.icao) && runway &&
+                    (!this.landingClearance || this.landingClearance.runway !== runway.name) &&
+                    !this.isOnGround() && this.positionModel.distanceToPosition(runway.positionModel) <= 0.8) {
+                    this.cancelLanding();
+                } else if (this.circuitClearance && this.isOnGround()) this.circuitPhase = 'LANDED';
                 break;
+            }
 
             default:
                 break;
@@ -2828,16 +2853,7 @@ export default class AircraftModel {
 
         // Calculate new position
         const hoursElapsed = TimeKeeper.getDeltaTimeForGameStateAndTimewarp() * TIME.ONE_SECOND_IN_HOURS;
-        let distanceTraveled_nm = groundSpeed * hoursElapsed;
-
-        if (this.vfrOrbit) {
-            const candidate = this.positionModel.generateDynamicPositionFromBearingAndDistance(groundTrack, distanceTraveled_nm);
-            if (this.vfrOrbit.center.distanceToPosition(candidate) > 1.45) {
-                groundTrack = this.positionModel.bearingToPosition(this.vfrOrbit.center);
-                distanceTraveled_nm = Math.min(distanceTraveled_nm, this.positionModel.distanceToPosition(this.vfrOrbit.center));
-            }
-        }
-
+        const distanceTraveled_nm = groundSpeed * hoursElapsed;
         this.positionModel.setCoordinatesByBearingAndDistance(groundTrack, distanceTraveled_nm);
 
         this.groundTrack = groundTrack;

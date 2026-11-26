@@ -1,10 +1,10 @@
-import { airspaceLabel, layerState, layerVisible } from '../ui/AirspaceLayers';
-import StaticPositionModel from '../base/StaticPositionModel';
 import $ from 'jquery';
 import _cloneDeep from 'lodash/cloneDeep';
 import _filter from 'lodash/filter';
 import _has from 'lodash/has';
 import _inRange from 'lodash/inRange';
+import StaticPositionModel from '../base/StaticPositionModel';
+import { airspaceLabel, layerState, layerVisible } from '../ui/AirspaceLayers';
 import AirportController from '../airport/AirportController';
 import CanvasStageModel from './CanvasStageModel';
 import EventBus from '../lib/EventBus';
@@ -148,7 +148,9 @@ export default class CanvasController {
          */
         this._shouldDrawAirspace = false;
 
-        this._radarLayers = { runways: true, procedure: false, approach: false, other: false };
+        this._radarLayers = {
+            runways: true, procedure: false, approach: false, other: false
+        };
 
         /**
          * Flag used to determine if restricted areas should be displayed
@@ -268,7 +270,7 @@ export default class CanvasController {
             if (!airport || !/^Y/i.test(airport.icao) || !this._shouldDrawAirspace) return;
             const pixel = CanvasStageModel.calculateCanvasPositionFromPagePosition(event.pageX, event.pageY);
             const point = CanvasStageModel.calculateRelativePositionFromCanvasPosition(...pixel);
-            const labels = airport.airspaceRegions.filter((area) => layerVisible(area) && area.isPointInside2D(point))
+            const labels = airport.airspaceIndex.column(point).filter((area) => layerVisible(area) && area.isPointInside2D(point))
                 .map((area) => [area.name, airspaceLabel(area), area.source || 'Airport configuration',
                     area.controller, area.restrictions].filter(Boolean).join(' · '));
             this.$element.attr('title', labels.join('\n'));
@@ -332,7 +334,9 @@ export default class CanvasController {
         this._shouldResize = true;
         this._shouldShallowRender = true;
         this._shouldDeepRender = true;
-        this._radarLayers = { runways: true, procedure: false, approach: false, other: false };
+        this._radarLayers = {
+            runways: true, procedure: false, approach: false, other: false
+        };
         this._shouldDrawRestrictedAreas = false;
         this._shouldDrawSidMap = false;
         this._shouldDrawStarMap = false;
@@ -761,7 +765,6 @@ export default class CanvasController {
         cc.font = BASE_CANVAS_FONT;
 
         for (const fixModel of NavigationLibrary.realFixes) {
-
             if (NavigationLibrary.isFixVisible(fixModel.name, this._radarLayers)) {
                 this._drawSingleFixAndLabel(cc, fixModel);
             }
@@ -1529,7 +1532,7 @@ export default class CanvasController {
                 cc.strokeStyle = '#d6a254';
                 cc.fillStyle = '#d6a254';
                 this._drawRelativePoly(cc, entry.region.relativePoly, false);
-                this._drawText(cc, entry.position, [aircraft.callsign + ' ' + Math.ceil(entry.seconds) + 's']);
+                this._drawText(cc, entry.position, [`${aircraft.callsign} ${Math.ceil(entry.seconds)}s`]);
                 cc.restore();
             }
             this._drawSingleRadarTarget(cc, radarTargetModels[i]);
@@ -1961,14 +1964,20 @@ export default class CanvasController {
             for (const fix of airport.data.vfrWaypoints || airport._vfrReports || []) {
                 if (!Array.isArray(fix.position)) continue;
                 const pos = new StaticPositionModel(fix.position, airport.positionModel, airport.magneticNorth);
-                this._drawText(cc, pos.relativePosition, ['△ ' + (fix.name || fix.id)]);
+                this._drawText(cc, pos.relativePosition, [`△ ${fix.name || fix.id}`]);
             }
             cc.restore();
         }
         const shelves = australian ? airport.airspaceRegions : airport.controlledShelves;
         for (let i = 0; i < shelves.length; i++) {
             const airspace = shelves[i];
-            if (australian && !layerVisible(airspace)) continue;
+            if (australian) {
+                if (!layerVisible(airspace)) continue;
+                const [left, bottom, right, top] = airspace.bounds;
+                const [xMin, yMin] = this._toCanvasPosition([left, top]);
+                const [xMax, yMax] = this._toCanvasPosition([right, bottom]);
+                if (xMax < 0 || yMax < 0 || xMin > CanvasStageModel.width || yMin > CanvasStageModel.height) continue;
+            }
 
             cc.save(); // to allow reset of translation
             // required positioning to use _drawPoly

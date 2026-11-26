@@ -1,6 +1,6 @@
 // Coordinates and grid cells use OpenScope's airport-relative kilometres.
 const CELL = 20;
-const key = (x, y) => x + '/' + y;
+const key = (x, y) => `${x}/${y}`;
 export const controlled = (area) => /^[A-E]$|^CTR$/.test(area.airspace_class) || area.type === 'CTR';
 const special = (area) => ['P', 'R', 'Q'].includes(area.type);
 
@@ -22,9 +22,13 @@ export default class AirspaceIndex {
         }
     }
 
-    at(point, altitude) {
+    column(point) {
         const local = this.cells.get(key(Math.floor(point[0] / CELL), Math.floor(point[1] / CELL))) || [];
-        const hits = local.concat(this.large).filter((area) => area.isPointInside(point, altitude));
+        return local.concat(this.large);
+    }
+
+    at(point, altitude) {
+        const hits = this.column(point).filter((area) => area.isPointInside(point, altitude));
         const published = hits.some((area) => area.source === 'imported' && !special(area));
         return published ? hits.filter((area) => area.source === 'imported' || special(area)) : hits;
     }
@@ -40,32 +44,85 @@ export default class AirspaceIndex {
         return nearest;
     }
 
+    // Split tracks at polygon edges and vertical limits so even narrow areas
+    // between trajectory samples are tested. Subdivide AGL spans for terrain.
+    segment(start, end, lower, upper, visit) {
+        const dx = end[0] - start[0];
+        const dy = end[1] - start[1];
+        const dz = upper - lower;
+        const ticks = new Set([0, 1]);
+        const steps = Math.max(1, Math.ceil(Math.max(Math.abs(dx), Math.abs(dy)) / CELL));
+        const candidates = new Set(this.large);
+        for (let i = 0; i < steps; i++) {
+            const x = Math.floor((start[0] + dx * i / steps) / CELL);
+            const y = Math.floor((start[1] + dy * i / steps) / CELL);
+            for (const col of [x, x + Math.sign(dx)]) {
+                for (const row of [y, y + Math.sign(dy)]) {
+                    (this.cells.get(key(col, row)) || []).forEach((region) => candidates.add(region));
+                }
+            }
+        }
+        const mark = (t) => { if (t > 0 && t < 1) ticks.add(t); };
+        for (const region of candidates) {
+            const [left, bottom, right, top] = region.bounds;
+            if (Math.max(start[0], end[0]) < left || Math.min(start[0], end[0]) > right ||
+                Math.max(start[1], end[1]) < bottom || Math.min(start[1], end[1]) > top) continue;
+            if (dz) region.altitudeLimitsAt(start).forEach((limit) => mark((limit - lower) / dz));
+            const limits = region.verticalLimits;
+            if (limits && (limits.lower.agl || limits.upper.agl)) {
+                const count = Math.ceil(Math.hypot(dx, dy) / 0.25);
+                for (let j = 1; j < count; j++) mark(j / count);
+            }
+            const poly = region.relativePoly;
+            let prev = poly[poly.length - 1];
+            for (const next of poly) {
+                const ex = next[0] - prev[0];
+                const ey = next[1] - prev[1];
+                const cross = dx * ey - dy * ex;
+                if (cross) {
+                    const px = prev[0] - start[0];
+                    const py = prev[1] - start[1];
+                    const edge = (px * dy - py * dx) / cross;
+                    if (edge >= 0 && edge <= 1) mark((px * ey - py * ex) / cross);
+                }
+                prev = next;
+            }
+        }
+        const ordered = [...ticks].sort((a, b) => a - b);
+        const inspect = (t) => {
+            const point = [start[0] + dx * t, start[1] + dy * t];
+            const altitude = lower + dz * t;
+            return visit(this.at(point, altitude), point, altitude, t);
+        };
+        for (let i = 0; i < ordered.length; i++) {
+            if (i && inspect((ordered[i - 1] + ordered[i]) / 2)) return true;
+            if (inspect(ordered[i])) return true;
+        }
+        return false;
+    }
+
     along(route, altitudeProfile) {
         const hits = new Set();
-        for (let i = 0; i < route.length; i += 1) {
-            const first = route[Math.max(0, i - 1)];
-            const next = route[i];
-            const dx = next[0] - first[0];
-            const dy = next[1] - first[1];
-            const divisions = Math.max(1, Math.ceil(Math.hypot(dx, dy) / 0.25));
-            for (let j = 0; j <= divisions; j += 1) {
-                const fraction = j / divisions;
-                const lower = Array.isArray(altitudeProfile) ? altitudeProfile[Math.max(0, i - 1)] : altitudeProfile;
-                const upper = Array.isArray(altitudeProfile) ? altitudeProfile[i] : altitudeProfile;
-                this.at([first[0] + dx * fraction, first[1] + dy * fraction], lower + (upper - lower) * fraction)
-                    .forEach((region) => hits.add(region));
-            }
+        const level = (i) => (Array.isArray(altitudeProfile) ? altitudeProfile[i] : altitudeProfile);
+        for (let i = route.length > 1 ? 1 : 0; i < route.length; i++) {
+            const previous = Math.max(0, i - 1);
+            this.segment(route[previous], route[i], level(previous), level(i), (areas) => {
+                areas.forEach((area) => hits.add(area));
+            });
         }
         return [...hits];
     }
 }
 
-export function authorised(aircraft, area, airport) {
+export function authorised(aircraft, area, airport, altitude = aircraft.altitude) {
     if (area.type === 'P' || area.type === 'R') return false;
     if (!controlled(area)) return true;
     if (aircraft.rules !== 'vfr') return true;
     if (area.airspace_class === 'A') return false;
     if (area.airspace_class === 'E' && !aircraft.octaRequired) return true;
     const clearance = aircraft.entryClearance;
-    return Boolean(clearance && clearance.airport === airport.icao && !aircraft.octaRequired);
+    if (aircraft.circuitClearance && airport.controllerConfig && airport.controllerConfig.tower.length &&
+        aircraft.controllerState.currentController !== 'TWR') return false;
+    return Boolean(clearance && clearance.airport === airport.icao && !aircraft.octaRequired &&
+        (altitude == null || altitude <= clearance.ceiling));
 }

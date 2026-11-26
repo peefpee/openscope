@@ -1004,8 +1004,8 @@ export default class AirportModel {
 
     getNearestAirspaceBoundary(point, altitude) { return this.airspaceIndex.nearest(point, altitude); }
 
-    isAirspaceEntryAuthorised(aircraft, region) {
-        return authorised(aircraft, region, this);
+    isAirspaceEntryAuthorised(aircraft, region, altitude) {
+        return authorised(aircraft, region, this, altitude);
     }
 
     getPredictedAirspaceEntry(aircraft, seconds = 90) {

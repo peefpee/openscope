@@ -12,7 +12,7 @@ import EventBus from '../lib/EventBus';
 import AircraftTypeDefinitionCollection from './AircraftTypeDefinitionCollection';
 import AircraftModel from './AircraftModel';
 import AircraftCommander from './AircraftCommander';
-import AircraftConflict from './AircraftConflict';
+import AircraftConflict, { conflictRange } from './AircraftConflict';
 import StripViewController from './StripView/StripViewController';
 import GameController, { GAME_EVENTS } from '../game/GameController';
 import { vfrEntry } from './Pilot/VfrArrival';
@@ -342,6 +342,8 @@ export default class AircraftController {
      * @param aircraftModel {AircraftModel}
      */
     aircraft_remove(aircraftModel) {
+        const airport = AirportController.current;
+        if (airport && airport.towerController) airport.towerController.removeArrival(aircraftModel.id);
         AirportController.removeAircraftFromAllRunwayQueues(aircraftModel);
         this.removeFlightNumberFromList(aircraftModel);
         this.removeAircraftModelFromList(aircraftModel);
@@ -375,7 +377,7 @@ export default class AircraftController {
 
             if (airport && airport.controllerConfig) {
                 if (airport.towerController) {
-                    airport.towerController.updateArrivalHandoff(aircraftModel);
+                    airport.towerController.updateArrivalHandoff(aircraftModel, this.aircraft.list);
 
                     if (airport.towerController.shouldDepartureContactPlayer(aircraftModel)) {
                         airport.towerController.transferDepartureToPlayer(aircraftModel);
@@ -591,7 +593,7 @@ export default class AircraftController {
             return;
         }
         const props = this._buildAircraftProps(pattern, false, 'vh/lightGA');
-        const entry = vfrEntry(airport, props.model.speed.cruise);
+        const entry = vfrEntry(airport, props.model.speed.cruise, props.model.bankAngle);
         if (!entry) return;
         this._createAircraftWithInitializationProps({
             ...props,
@@ -893,7 +895,7 @@ export default class AircraftController {
      * @private
      */
     _shouldAddNewConflict(aircraftModel, comparisonAircraftModel) {
-        const boundingBoxLength = km(8);
+        const boundingBoxLength = conflictRange(aircraftModel, comparisonAircraftModel, km(8));
         const dx = abs(aircraftModel.relativePosition[0] - comparisonAircraftModel.relativePosition[0]);
         const dy = abs(aircraftModel.relativePosition[1] - comparisonAircraftModel.relativePosition[1]);
 

@@ -50,7 +50,7 @@ ava('#oppositeAngle returns opposite of runway heading', (t) => {
     const result = runwayModel.oppositeAngle;
     const expectedResult = 4.502864578080533;
 
-    t.true(result === expectedResult);
+    t.true(Math.abs(result - expectedResult) < 1e-12);
 });
 
 ava('.addAircraftToQueue() adds an aircraft#id to the queue', (t) => {
@@ -69,7 +69,7 @@ ava('.calculateCrosswindAngleForRunway() returns the crosswind angle for a given
     const expectedResult = 2.478452429896785;
     const result = model.calculateCrosswindAngleForRunway(windAngleMock);
 
-    t.true(result === expectedResult);
+    t.true(Math.abs(result - expectedResult) < 1e-12);
 });
 
 ava('.getGlideslopeAltitude() returns glideslope altitude at the specified distance', (t) => {

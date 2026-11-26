@@ -1,3 +1,4 @@
+import TimeKeeper from '../engine/TimeKeeper';
 import EventBus from '../lib/EventBus';
 import { AIRCRAFT_EVENT } from '../constants/eventNames';
 import {
@@ -129,13 +130,28 @@ export default class TowerController {
         }
 
         this._arrivals.add(aircraft.id);
+    }
 
-        if (typeof aircraft.radioCall === 'function') {
-            aircraft.radioCall(
-                'contact established, continue approach, cleared to land',
-                AIRPORT_CONTROL_POSITION_NAME.TOWER
-            );
+    manageLandingClearance(aircraft, traffic = []) {
+        if (!this._arrivals.has(aircraft.id) || aircraft.isOnGround() ||
+            (aircraft.rules === 'vfr' && !aircraft.entryClearance)) return;
+        const runway = aircraft.fms && aircraft.fms.arrivalRunwayModel;
+        if (!runway || !aircraft.pilot.hasApproachClearance) return;
+        const occupied = traffic.some((other) => {
+            if (other === aircraft || ![FLIGHT_PHASE.TAKEOFF, FLIGHT_PHASE.LANDING].includes(other.flightPhase)) return false;
+            const assigned = other.isArrival() ? other.fms.arrivalRunwayModel : other.fms.departureRunwayModel;
+            return assigned && (assigned === runway || assigned.name === runway.oppositeName) && other.isOnGround();
+        });
+        if (occupied) {
+            if (aircraft.landingClearance) {
+                aircraft.landingClearance = null;
+                aircraft.radioCall('landing clearance cancelled, runway occupied', AIRPORT_CONTROL_POSITION_NAME.TOWER);
+            }
+            return;
         }
+        if (aircraft.landingClearance) return;
+        aircraft.landingClearance = { runway: runway.name, issuer: CONTROLLER_TYPE.TWR, issued: TimeKeeper.accumulatedDeltaTime };
+        aircraft.radioCall(`cleared to land runway ${runway.name}`, AIRPORT_CONTROL_POSITION_NAME.TOWER);
     }
 
     /**
@@ -231,8 +247,13 @@ export default class TowerController {
      * @param {AircraftModel} aircraft
      * @return {boolean} true if a go-around was triggered
      */
-    updateArrivalHandoff(aircraft) {
+    updateArrivalHandoff(aircraft, traffic = []) {
         if (!aircraft || aircraft.projected) {
+            return false;
+        }
+
+        if (aircraft.controllerState.currentController === CONTROLLER_TYPE.TWR) {
+            this.manageLandingClearance(aircraft, traffic);
             return false;
         }
 
@@ -305,6 +326,10 @@ export default class TowerController {
             return;
         }
 
+        this._handoffThresholdTriggered.delete(aircraft.id);
+        aircraft.landingClearance = null;
+        aircraft.circuitClearance = null;
+        aircraft.circuitPhase = 'GO AROUND';
         // Cancel the approach
         aircraft.pilot.hasApproachClearance = false;
         aircraft.pilot.approachGuidance = null;

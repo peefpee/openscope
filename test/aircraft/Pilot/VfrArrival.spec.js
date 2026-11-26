@@ -132,9 +132,9 @@ test.serial('VFR arrivals accept altitude and speed instructions while remaining
         t.truthy(aircraft.vfrOrbit);
 
         // Altitude-only instruction succeeds and keeps aircraft in entry orbit
-        const altResult = runCommand(commander, aircraft, 'a 30');
+        const altResult = runCommand(commander, aircraft, 'a 18');
         t.true(altResult[0]);
-        t.is(aircraft.mcp.altitude, 3000);
+        t.is(aircraft.mcp.altitude, 1800);
         t.truthy(aircraft.vfrOrbit);
 
         // Speed instruction succeeds and keeps aircraft in entry orbit
@@ -149,7 +149,7 @@ test.serial('VFR arrivals accept altitude and speed instructions while remaining
             aircraft.update();
         }
 
-        t.is(aircraft.target.altitude, 3000);
+        t.is(aircraft.target.altitude, 1800);
         t.is(aircraft.target.speed, 90);
         t.true(aircraft.altitude > 1600);
         t.true(aircraft.speed < 110);
@@ -178,14 +178,14 @@ test.serial('VFR arrivals exit entry orbit on heading, fly present heading, dire
         // 1. Heading instruction exits entry orbit and retains assigned altitude
         const headingAc = createOrbitingVfrAircraft(airport, scope);
         const orbitCenter = headingAc.vfrOrbit.center;
-        t.true(runCommand(commander, headingAc, 'a 30')[0]);
+        t.true(runCommand(commander, headingAc, 'a 18')[0]);
         t.true(runCommand(commander, headingAc, 'h 270')[0]);
         t.is(headingAc.vfrOrbit, null);
         t.is(headingAc.mcp.headingMode, 'HOLD');
         for (let i = 0; i < 90; i++) {
             headingAc.update();
         }
-        t.is(headingAc.target.altitude, 3000);
+        t.is(headingAc.target.altitude, 1800);
         t.true(orbitCenter.distanceToPosition(headingAc.positionModel) > 1.5);
 
         // 1b. Re-entering OCTA from clear airspace restores an orbit at current altitude and syncs MCP
@@ -438,6 +438,25 @@ test.serial('SpawnScheduler.setVfrEnabled spawns a controllable VFR arrival end-
         destroyTimerStub.restore();
         gameIntervalStub.restore();
         logStub.restore();
+        NavigationLibrary.reset();
+        airport.releaseWindListener();
+        AirportController.reset();
+    }
+});
+
+test.serial('OCTA guidance levels an assigned climb below the CTA shelf', (t) => {
+    const { airport, scope } = createVfrScenario();
+    try {
+        const aircraft = createOrbitingVfrAircraft(airport, scope);
+        aircraft.radioCall = () => {};
+        aircraft.positionModel.setCoordinates(airport.positionModel.generateCoordinatesFromBearingAndDistance(0, 15));
+        t.true(runCommand(new AircraftCommander(), aircraft, 'a 30')[0]);
+        aircraft.updateTarget();
+        aircraft.update();
+        t.truthy(aircraft.predictedEntry);
+        t.true(aircraft.target.altitude < airport.elevation + 2000);
+        t.is(aircraft.mcp.altitude, 3000);
+    } finally {
         NavigationLibrary.reset();
         airport.releaseWindListener();
         AirportController.reset();
