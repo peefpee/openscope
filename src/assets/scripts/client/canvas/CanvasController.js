@@ -1653,6 +1653,8 @@ export default class CanvasController {
         const cs = aircraftModel.controllerState || {};
         if (aircraftModel.rules === 'vfr') tags.push('VFR');
         if (cs.currentController && cs.currentController !== 'NONE') tags.push(cs.currentController);
+        if (aircraftModel.awaitingIdentification) tags.push('UNID');
+        else if (aircraftModel.identified) tags.push('ID');
         if (cs.handoffState === 'OVERDUE') tags.push('OVD');
         else if (cs.handoffRequired || cs.handoffState === 'REQUIRED') tags.push('HO');
         if (aircraftModel.octaRequired) tags.push('OCTA');

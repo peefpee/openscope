@@ -1,4 +1,5 @@
 import test from 'ava';
+import sinon from 'sinon';
 import AircraftCommander from '../../src/assets/scripts/client/aircraft/AircraftCommander';
 import { MCP_MODE } from '../../src/assets/scripts/client/aircraft/ModeControl/modeControlConstants';
 import AircraftModel from '../../src/assets/scripts/client/aircraft/AircraftModel';
@@ -12,6 +13,7 @@ import { AIRCRAFT_EVENT } from '../../src/assets/scripts/client/constants/eventN
 import TimeKeeper from '../../src/assets/scripts/client/engine/TimeKeeper';
 import EventBus from '../../src/assets/scripts/client/lib/EventBus';
 import NavigationLibrary from '../../src/assets/scripts/client/navigationLibrary/NavigationLibrary';
+import UiController from '../../src/assets/scripts/client/ui/UiController';
 import a320 from '../../assets/aircraft/a320.json';
 
 function createDatAirportFixture(filename) {
@@ -28,6 +30,7 @@ function createDatAirportFixture(filename) {
 }
 
 test.serial('departures track the selected outbound and transfer ownership once', (t) => {
+    const uiLogStub = sinon.stub(UiController, 'ui_log');
     const commander = new AircraftCommander();
     const frameTime = TimeKeeper.getDeltaTimeForGameStateAndTimewarp;
     TimeKeeper.getDeltaTimeForGameStateAndTimewarp = () => 1;
@@ -78,6 +81,9 @@ test.serial('departures track the selected outbound and transfer ownership once'
             t.is(plane.mcp.heading, runway.angle);
             for (let i = 0; i < 1400 && !plane.transferredToCentre; i++) {
                 plane.update();
+                if (airport.towerController && airport.towerController.shouldDepartureContactPlayer(plane)) {
+                    airport.towerController.transferDepartureToPlayer(plane);
+                }
                 if (!manual && i === 370) {
                     t.true(plane.positionModel.distanceToPosition(runway.positionModel) > 12);
                     t.is(plane.mcp.headingMode, MCP_MODE.HEADING.HOLD);
@@ -121,6 +127,7 @@ test.serial('departures track the selected outbound and transfer ownership once'
             AirportController.reset();
         }
     } finally {
+        uiLogStub.restore();
         EventBus.off(AIRCRAFT_EVENT.AIRSPACE_EXIT, recordExit);
         TimeKeeper.getDeltaTimeForGameStateAndTimewarp = frameTime;
         NavigationLibrary.reset();
@@ -129,6 +136,7 @@ test.serial('departures track the selected outbound and transfer ownership once'
 });
 
 test.serial('Australian departures do not silently auto-transfer when passing outbound fix', (t) => {
+    const uiLogStub = sinon.stub(UiController, 'ui_log');
     const scope = createDatAirportFixture('YTES.dat');
     const departure = scope.spawnPatterns.find((p) => p.category === 'departure');
     const airport = new AirportModel(scope);
@@ -166,6 +174,9 @@ test.serial('Australian departures do not silently auto-transfer when passing ou
         let passedOutboundFix = false;
         for (let i = 0; i < 1400; i++) {
             plane.update();
+            if (airport.towerController && airport.towerController.shouldDepartureContactPlayer(plane)) {
+                airport.towerController.transferDepartureToPlayer(plane);
+            }
             if (i === 370) {
                 t.true(transmit('direct EXITX'));
             }
@@ -180,6 +191,7 @@ test.serial('Australian departures do not silently auto-transfer when passing ou
         t.true(plane.isPlayerControlled());
         t.is(handoffs.length, 0);
     } finally {
+        uiLogStub.restore();
         EventBus.off(AIRCRAFT_EVENT.AIRSPACE_EXIT, recordExit);
         TimeKeeper.getDeltaTimeForGameStateAndTimewarp = frameTime;
         airport.releaseWindListener();

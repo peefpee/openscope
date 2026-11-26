@@ -452,6 +452,9 @@ export default class AircraftModel {
          */
         this.isRemovable = false;
         this.transferredToCentre = false;
+        this.awaitingIdentification = false;
+        this.identified = false;
+        this.identificationTime = null;
 
         /**
          * Controller ownership and handoff state for this aircraft.
@@ -760,11 +763,19 @@ export default class AircraftModel {
                 handoffState: HANDOFF_STATE.NONE
             });
         } else if (data.category === FLIGHT_CATEGORY.DEPARTURE) {
+            const hasTower = Boolean(config && Array.isArray(config.tower) && config.tower.length > 0);
+            const depRunway = this.fms && this.fms.departureRunwayModel;
+            const twrForRunway = hasTower && depRunway ? config.getTowerForRunway(depRunway.name) : (hasTower ? config.tower[0] : null);
             this.setControllerState({
-                currentController: CONTROLLER_TYPE.DEP,
-                currentFrequency: departureFrequency,
+                currentController: hasTower ? CONTROLLER_TYPE.TWR : CONTROLLER_TYPE.NONE,
+                currentFrequency: twrForRunway ? twrForRunway.frequency : null,
                 handoffState: HANDOFF_STATE.NONE
             });
+            if (!this.projected && depRunway && !(data.controllerState && data.controllerState.currentController)) {
+                this.pilot.clearedAsFiled();
+                this.taxiToRunway(depRunway);
+                this.shouldTakeOffWhenRunwayIsClear = true;
+            }
         } else {
             this.setControllerState({
                 currentController: CONTROLLER_TYPE.NONE,

@@ -305,5 +305,5 @@ ava('freqChangeApproved command uses zero-arg validator and has fca/freqchangeap
 
 ava('make sure we test all 44 aircraft commands', t => {
     t.true(Object.values(AIRCRAFT_COMMAND_MAP)
-        .filter(val => !val.isSystemCommand).length === 44);
+        .filter(val => !val.isSystemCommand).length === 45);
 });

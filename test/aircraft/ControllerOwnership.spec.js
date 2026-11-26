@@ -89,7 +89,7 @@ test.serial('initializes Australian controllerState fields cleanly and preserves
         t.is(vfrArrival.controllerState.currentController, CONTROLLER_TYPE.APP);
         t.true(vfrArrival.isPlayerControlled());
 
-        // Departure initializes to DEP
+        // Departure initializes to TWR on Australian towered airports
         const dep = createYssyAircraft({
             category: 'departure',
             origin: 'YSSY',
@@ -98,9 +98,9 @@ test.serial('initializes Australian controllerState fields cleanly and preserves
             speed: 0,
             routeString: 'YSSY25.AVMOV1.AVMOV'
         });
-        t.is(dep.controllerState.currentController, CONTROLLER_TYPE.DEP);
-        t.is(dep.controllerState.currentFrequency, '123.000');
-        t.true(dep.isPlayerControlled());
+        t.is(dep.controllerState.currentController, CONTROLLER_TYPE.TWR);
+        t.is(dep.controllerState.currentFrequency, '120.500');
+        t.false(dep.isPlayerControlled());
     } finally {
         prop.speech = previousSpeech;
         uiLogStub.restore();

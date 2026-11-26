@@ -22,7 +22,8 @@ const UI_TRAFFIC_MODAL_TEMPLATE = `
         <p class="dialog-title">Traffic rate</p>
         <div class="dialog-body nice-scrollbar"></div>
         <div class="au-vfr">
-            <label><input type="checkbox"> VFR arrivals</label>
+            <label><input type="checkbox" name="enableDepartures"> Enable departures</label>
+            <label><input type="checkbox" name="enableVfr"> VFR arrivals</label>
             <label>Maximum VFR aircraft <input name="maxAircraft" type="number" min="1" step="1"></label>
             <label>Seconds between arrivals <input name="intervalSeconds" type="number" min="10" step="1"></label>
         </div>
@@ -106,7 +107,11 @@ export default class TrafficRateController {
         this.$dialogBody = this.$dialog.find(`.${CLASSNAMES.DIALOG_BODY}`);
 
         this._buildDialogBody();
-        this.$dialog.find('.au-vfr input[type=checkbox]').on('change', (event) => SpawnScheduler.setVfrEnabled(event.target.checked));
+        this.$dialog.find('.au-vfr input[name=enableDepartures]').on('change', (event) => {
+            SpawnScheduler.setDeparturesEnabled(event.target.checked);
+            this._syncDepartureControlState();
+        });
+        this.$dialog.find('.au-vfr input[name=enableVfr]').on('change', (event) => SpawnScheduler.setVfrEnabled(event.target.checked));
         this.$dialog.find('.au-vfr input[type=number]').on('change', ({ target }) => {
             const { data } = AirportController.current;
             const settings = data.vfrOptions || (data.vfrOptions = {});
@@ -189,8 +194,20 @@ export default class TrafficRateController {
     * @method toggleDialog
     */
     toggleDialog() {
-        this.$dialog.find('.au-vfr input[type=checkbox]').prop('checked', !!SpawnScheduler.vfrEnabled);
+        this.$dialog.find('.au-vfr input[name=enableDepartures]').prop('checked', SpawnScheduler.isDeparturesEnabledForAirport());
+        this.$dialog.find('.au-vfr input[name=enableVfr]').prop('checked', !!SpawnScheduler.vfrEnabled);
+        this._syncDepartureControlState();
         this.$dialog.toggleClass(SELECTORS.CLASSNAMES.OPEN);
+    }
+
+    _syncDepartureControlState() {
+        const au = AirportController.current && /^Y/i.test(AirportController.current.icao);
+        const disabled = Boolean(au && !SpawnScheduler.isDeparturesEnabledForAirport());
+        this.$dialogBody.find(`input[name="${FLIGHT_CATEGORY.DEPARTURE}"]`).prop('disabled', disabled);
+        (this._elements[FLIGHT_CATEGORY.DEPARTURE] || []).forEach(({ $formElement }) => {
+            $formElement.find('input').prop('disabled', disabled);
+            $formElement.toggleClass('is-disabled', disabled);
+        });
     }
 
     /**
@@ -239,7 +256,9 @@ export default class TrafficRateController {
         const options = (AirportController.current && AirportController.current.data.vfrOptions) || {};
         this.$dialog.find('[name=maxAircraft]').val(options.maxAircraft || 4);
         this.$dialog.find('[name=intervalSeconds]').val(options.intervalSeconds || 300);
-        this.$dialog.find('.au-vfr').toggle(!!au).find('input[type=checkbox]').prop('checked', !!SpawnScheduler.vfrEnabled);
+        this.$dialog.find('.au-vfr').toggle(!!au);
+        this.$dialog.find('.au-vfr input[name=enableVfr]').prop('checked', !!SpawnScheduler.vfrEnabled);
+        this.$dialog.find('.au-vfr input[name=enableDepartures]').prop('checked', SpawnScheduler.isDeparturesEnabledForAirport());
         this.$dialogBody.empty();
         this._rates = {};
         this._elements = {};

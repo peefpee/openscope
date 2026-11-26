@@ -72,6 +72,7 @@ export default class AircraftCommander {
         let response = [];
         let response_end = '';
         let redResponse = false;
+        let anySuccess = false;
         const deferred = [];
 
         for (let i = 0; i < commands.length; i++) {
@@ -89,11 +90,14 @@ export default class AircraftCommander {
 
             // A successful legacy `centre` handoff produces its radio call via AIRSPACE_EXIT.
             if (command === 'centre' && !wasTransferredToCentre && aircraft.transferredToCentre) {
+                anySuccess = true;
                 break;
             }
 
             if (retval) {
-                if (!retval[0]) {
+                if (retval[0]) {
+                    anySuccess = true;
+                } else {
                     redResponse = true;
                 }
 
@@ -161,17 +165,41 @@ export default class AircraftCommander {
                 response_end = `, ${response_end}`;
             }
 
-            const r_log = _map(response, (r) => r.log).join(', ');
-            const r_say = _map(response, (r) => r.say).join(', ');
+            const r_log = _map(response, (r) => r.log).filter(Boolean).join(', ');
+            const r_say = _map(response, (r) => r.say).filter(Boolean).join(', ');
 
-            UiController.ui_log(`${aircraft.readbackCallsign}, ${r_log} ${response_end}`, redResponse);
-            speech_say(
-                [
-                    { type: 'callsign', content: aircraft },
-                    { type: 'text', content: ` ${radio_spokenText(`${r_say} ${response_end}`)}` }
-                ],
-                aircraft.pilotVoice
-            );
+            if (!aircraft.projected && aircraft.awaitingIdentification && anySuccess &&
+                aircraft.isAustralianOperation && aircraft.isAustralianOperation()) {
+                aircraft.awaitingIdentification = false;
+                aircraft.identified = true;
+                aircraft.identificationTime = TimeKeeper.accumulatedDeltaTime;
+                const airport = AirportController.airport_get();
+                const config = airport && airport.controllerConfig;
+                const approach = config && typeof config.getApproach === 'function' ? config.getApproach() : null;
+                const facilityName = (config && typeof config.getRadioNameForController === 'function' &&
+                    config.getRadioNameForController(approach, CONTROLLER_TYPE.APP)) || 'Approach';
+                const instrLog = r_log ? `, ${r_log}` : '';
+                const instrSay = r_say ? `, ${radio_spokenText(r_say)}` : '';
+                UiController.ui_log(`${aircraft.readbackCallsign}, ${facilityName}, identified${instrLog}.`, false);
+                speech_say(
+                    [
+                        { type: 'callsign', content: aircraft },
+                        { type: 'text', content: `, ${facilityName}, identified${instrSay}` }
+                    ],
+                    aircraft.pilotVoice
+                );
+            }
+
+            if (r_log) {
+                UiController.ui_log(`${aircraft.readbackCallsign}, ${r_log} ${response_end}`, redResponse);
+                speech_say(
+                    [
+                        { type: 'callsign', content: aircraft },
+                        { type: 'text', content: ` ${radio_spokenText(`${r_say} ${response_end}`)}` }
+                    ],
+                    aircraft.pilotVoice
+                );
+            }
         }
 
         return true;
@@ -1277,6 +1305,16 @@ export default class AircraftCommander {
 
     runVisual(aircraft, [runway]) {
         return aircraft.pilot.joinApproach(aircraft, runway);
+    }
+
+    runIdentified(aircraft) {
+        if (!aircraft.isAustralianOperation || !aircraft.isAustralianOperation()) {
+            return [false, 'radar identification acknowledgement is only available at Australian airports'];
+        }
+        if (aircraft.identified && !aircraft.awaitingIdentification) {
+            return [true, { log: '', say: '' }];
+        }
+        return [true, { log: '', say: '' }];
     }
 
     /**

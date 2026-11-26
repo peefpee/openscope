@@ -4,6 +4,7 @@ import SpawnPatternCollection from './SpawnPatternCollection';
 import TimeKeeper from '../engine/TimeKeeper';
 import GameController from '../game/GameController';
 import { INVALID_NUMBER } from '../constants/globalConstants';
+import { isAustralianAirport } from '../constants/controllerConstants';
 
 /**
  * Used to create a game_timer for a `SpawnPatternModel` and provide
@@ -66,8 +67,68 @@ class SpawnScheduler {
         this.vfrTimer = GameController.game_interval(spawn, Math.max(10, (AirportController.current.data.vfrOptions || {}).intervalSeconds || 300));
     }
 
+    _departuresStorageKey(icao) {
+        return `openscope-au-departures-${String(icao || '').trim().toUpperCase()}`;
+    }
+
+    isDeparturesEnabledForAirport(airport = AirportController.current) {
+        if (!airport || !isAustralianAirport(airport.icao)) {
+            return true;
+        }
+        if (typeof this._departuresEnabled === 'boolean' && this._departuresAirportIcao === airport.icao) {
+            return this._departuresEnabled;
+        }
+        try {
+            const stored = window.localStorage && window.localStorage.getItem(this._departuresStorageKey(airport.icao));
+            if (stored === 'true') return true;
+            if (stored === 'false') return false;
+        } catch (e) { /* ignore storage errors */ }
+        return false;
+    }
+
+    setDeparturesEnabled(enabled, spawnImmediately = true) {
+        const airport = AirportController.current;
+        const next = Boolean(enabled);
+        this._departuresEnabled = next;
+        this._departuresAirportIcao = airport ? airport.icao : null;
+        if (airport && isAustralianAirport(airport.icao)) {
+            try {
+                if (window.localStorage) {
+                    window.localStorage.setItem(this._departuresStorageKey(airport.icao), String(next));
+                }
+            } catch (e) { /* ignore storage errors */ }
+        }
+
+        if (!next) {
+            SpawnPatternCollection.spawnPatternModels
+                .filter((s) => !s.isAirborneAtSpawn())
+                .forEach((pattern) => {
+                    if (pattern.scheduleId && pattern.scheduleId !== INVALID_NUMBER) {
+                        GameController.destroyTimer(pattern.scheduleId);
+                        pattern.scheduleId = null;
+                    }
+                });
+            return;
+        }
+
+        SpawnPatternCollection.spawnPatternModels
+            .filter((s) => !s.isAirborneAtSpawn())
+            .forEach((pattern) => {
+                pattern.cycleStart(TimeKeeper.accumulatedDeltaTime);
+                if (!pattern.scheduleId || pattern.scheduleId === INVALID_NUMBER) {
+                    pattern.scheduleId = this.createNextSchedule(pattern);
+                }
+            });
+
+        if (spawnImmediately && this._aircraftController) {
+            this.createPreSpawnDepartures();
+        }
+    }
+
     startScheduler() {
         this.setVfrEnabled(false);
+        this._departuresEnabled = this.isDeparturesEnabledForAirport();
+        this._departuresAirportIcao = AirportController.current ? AirportController.current.icao : null;
         // TODO: rename to createSchedulesWithTimer
         this.createSchedulesFromList();
         // TODO: create getter on collection to get all preSpawn including departures
@@ -82,7 +143,12 @@ class SpawnScheduler {
      * @method createSchedulesFromList
      */
     createSchedulesFromList() {
+        const departuresAllowed = this.isDeparturesEnabledForAirport();
         _forEach(SpawnPatternCollection.spawnPatternModels, (spawnPatternModel) => {
+            if (!departuresAllowed && !spawnPatternModel.isAirborneAtSpawn()) {
+                spawnPatternModel.scheduleId = null;
+                return;
+            }
             // set the #cycleStartTime for this `spawnPatternModel` with current game time
             spawnPatternModel.cycleStart(TimeKeeper.accumulatedDeltaTime);
             spawnPatternModel.scheduleId = this.createNextSchedule(spawnPatternModel);
@@ -119,6 +185,10 @@ class SpawnScheduler {
      * @method createPreSpawnDepartures
      */
     createPreSpawnDepartures() {
+        if (!this.isDeparturesEnabledForAirport()) {
+            return;
+        }
+
         const departureModelsToPreSpawn = SpawnPatternCollection.getDepartureModelsForPreSpawn();
 
         for (let i = 0; i < departureModelsToPreSpawn.length; i++) {

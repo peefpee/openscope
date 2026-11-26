@@ -51,7 +51,8 @@ test('departure transfer moves an aircraft to the player and centre accepts hand
 
     departure.setControllerState({ currentController: CONTROLLER_TYPE.TWR });
     airport.towerController.transferDepartureToPlayer(departure);
-    t.is(departure.controllerState.currentController, CONTROLLER_TYPE.DEP);
+    t.is(departure.controllerState.currentController, CONTROLLER_TYPE.APP);
+    t.true(departure.awaitingIdentification);
 
     airport.centreController.acceptDeparture(departure);
     t.true(airport.centreController._aircraft.has(departure.id));

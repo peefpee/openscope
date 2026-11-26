@@ -244,6 +244,7 @@ const CUSTOM_ARG_AIRCRAFT_COMMANDS = {
         parse: altitudeParser
     },
     clearentry: { validate: zeroToTwoArgumentsValidator, parse: noop },
+    identified: { validate: zeroArgumentsValidator, parse: noop },
     octa: { validate: zeroArgumentsValidator, parse: noop },
     dw: { validate: circuitJoinValidator, parse: noop },
     xw: { validate: circuitJoinValidator, parse: noop },

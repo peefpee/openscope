@@ -501,8 +501,14 @@ export default class TowerController {
             return false;
         }
 
-        // Must be assigned to tower
-        if (cs.currentController !== CONTROLLER_TYPE.TWR) {
+        const config = this._airportModel.controllerConfig;
+        const hasTower = Boolean(config && Array.isArray(config.tower) && config.tower.length > 0);
+
+        // Towered airports require Tower ownership; non-towered airports allow NONE
+        if (hasTower && cs.currentController !== CONTROLLER_TYPE.TWR) {
+            return false;
+        }
+        if (!hasTower && cs.currentController !== CONTROLLER_TYPE.NONE) {
             return false;
         }
 
@@ -510,7 +516,6 @@ export default class TowerController {
         const agl = aircraft.altitude - airportElevation;
 
         // Get the contact altitude from config or use default
-        const config = this._airportModel.controllerConfig;
         const contactCfg = config && typeof config.getDepartureContactAltitudeAgl === 'function' ?
             config.getDepartureContactAltitudeAgl() :
             null;
@@ -526,8 +531,8 @@ export default class TowerController {
     }
 
     /**
-     * Transfer a departure to the player's frequency.
-     * Generates the initial contact radio call.
+     * Transfer a departure to the player's Approach frequency.
+     * Generates the initial contact radio call and marks aircraft as awaiting radar identification.
      *
      * @param {AircraftModel} aircraft
      */
@@ -536,16 +541,25 @@ export default class TowerController {
             return;
         }
 
+        const config = this._airportModel.controllerConfig;
+        const approach = config && typeof config.getApproach === 'function' ? config.getApproach() : null;
+        const approachFreq = approach ? approach.frequency : null;
         const cs = aircraft.controllerState;
+
+        aircraft.awaitingIdentification = true;
+        aircraft.identified = false;
+        aircraft.identificationTime = null;
 
         if (typeof aircraft.setControllerState === 'function') {
             aircraft.setControllerState({
-                currentController: CONTROLLER_TYPE.DEP,
+                currentController: CONTROLLER_TYPE.APP,
+                currentFrequency: approachFreq || cs.currentFrequency,
                 handoffState: HANDOFF_STATE.COMPLETED,
                 handoffCompleted: true
             });
         } else {
-            cs.currentController = CONTROLLER_TYPE.DEP;
+            cs.currentController = CONTROLLER_TYPE.APP;
+            cs.currentFrequency = approachFreq || cs.currentFrequency;
             cs.handoffState = HANDOFF_STATE.COMPLETED;
             cs.handoffCompleted = true;
             aircraft.isControllable = true;
@@ -557,6 +571,7 @@ export default class TowerController {
 
     /**
      * Generate the initial contact radio call for a departure.
+     * Format: `[Approach facility name], [Aircraft callsign], passing [current] for [assigned].`
      *
      * @param {AircraftModel} aircraft
      * @private
@@ -566,22 +581,27 @@ export default class TowerController {
             return;
         }
 
-        const alt = digits_decimal(aircraft.altitude, -2);
-        const altdiff = aircraft.altitude - aircraft.mcp.altitude;
-        let altLog;
+        const config = this._airportModel.controllerConfig;
+        const approach = config && typeof config.getApproach === 'function' ? config.getApproach() : null;
+        const facilityName = (config && typeof config.getRadioNameForController === 'function' &&
+            config.getRadioNameForController(approach, CONTROLLER_TYPE.APP)) || 'Approach';
 
+        const currentAlt = digits_decimal(aircraft.altitude, -2);
+        const assignedAlt = Math.round(aircraft.mcp && Number.isFinite(aircraft.mcp.altitude) ?
+            aircraft.mcp.altitude :
+            aircraft.altitude);
+        const altdiff = aircraft.altitude - assignedAlt;
+
+        let altPart;
         if (Math.abs(altdiff) > 200) {
-            if (altdiff > 0) {
-                altLog = `passing ${alt}, descending to ${aircraft.mcp.altitude}`;
-            } else {
-                altLog = `passing ${alt}, climbing to ${aircraft.mcp.altitude}`;
-            }
+            altPart = `passing ${currentAlt} for ${assignedAlt}`;
         } else {
-            altLog = `maintaining ${alt}`;
+            altPart = `maintaining ${currentAlt}`;
         }
 
+        const logMessage = `${facilityName}, ${aircraft.readbackCallsign || aircraft.callsign}, ${altPart}.`;
         if (typeof aircraft.radioCall === 'function') {
-            aircraft.radioCall(altLog, AIRPORT_CONTROL_POSITION_NAME.DEPARTURE);
+            aircraft.radioCall(logMessage, AIRPORT_CONTROL_POSITION_NAME.APPROACH);
         }
     }
 

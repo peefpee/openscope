@@ -135,6 +135,7 @@ export const AIRCRAFT_COMMAND_MAP = {
         isSystemCommand: false
     },
     clearentry: { aliases: ['clearentry'], functionName: 'runClearEntry', isSystemCommand: false },
+    identified: { aliases: ['identified', 'ident'], functionName: 'runIdentified', isSystemCommand: false },
     octa: { aliases: ['octa'], functionName: 'runOcta', isSystemCommand: false },
     dw: { aliases: ['dw'], functionName: 'runCircuit', isSystemCommand: false },
     xw: { aliases: ['xw'], functionName: 'runCircuit', isSystemCommand: false },
