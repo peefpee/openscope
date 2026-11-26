@@ -615,7 +615,9 @@ class UiController {
      */
     onAirportChange() {
         this.$log.empty();
-        this.msaView.refresh();
+        if (this.msaView) {
+            this.msaView.setOpen(false);
+        }
         this._updateFrequencyPanel();
     }
 

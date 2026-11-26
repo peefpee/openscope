@@ -2,11 +2,13 @@
     {{#content "body" mode="append" }}
         <div id="canvases"></div>
         <div id="log"></div>
-        <aside id="msa-panel" hidden aria-label="Minimum sector altitudes">
-            <header><strong></strong><button type="button" aria-label="Close MSA display">&times;</button></header>
-            <select aria-label="MSA centre"></select>
+        <aside id="msa-panel" hidden aria-hidden="true" aria-label="Minimum sector altitudes">
+            <header><strong></strong><button type="button" class="msa-close" aria-label="Close MSA display">&times;</button></header>
+            <select aria-label="MSA centre" hidden></select>
             <p class="msa-reference"></p>
-            <canvas width="400" height="280" aria-hidden="true"></canvas>
+            <p class="msa-empty" hidden></p>
+            <button type="button" class="msa-open-import" hidden>Import earth_msa.dat</button>
+            <canvas width="400" height="280" aria-hidden="true" hidden></canvas>
             <ul></ul>
         </aside>
         <aside id="frequency-panel" class="frequency-panel notSelectable" aria-label="Adjacent controller frequencies"></aside>

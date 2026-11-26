@@ -210,7 +210,8 @@
     position: absolute;
     top: 100px;
     left: 12px;
-    z-index: 3;
+    z-index: 20;
+    min-width: 240px;
     max-height: 65vh;
     max-width: calc(100vw - 48px);
     overflow: auto;
@@ -219,10 +220,13 @@
     border: 1px solid @blue-medium;
     color: @light-gray;
     font-size: 13px;
-    header { display: flex; justify-content: space-between; align-items: center; }
-    header button { background: transparent; border: 0; color: inherit; font-size: 20px; cursor: pointer; }
-    select { font: inherit; }
+    &[hidden] { display: none !important; pointer-events: none; }
+    header { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+    header button { background: transparent; border: 0; color: @light-gray; font-size: 20px; line-height: 1; cursor: pointer; padding: 0 4px; }
+    select { font: inherit; background: @dark-06; color: @light-gray; border: 1px solid @blue-medium; padding: 2px 6px; margin-top: 6px; }
     p { margin: 8px 0 4px; }
+    .msa-empty { color: @light-gray; line-height: 1.4; }
+    .msa-open-import { margin-top: 8px; padding: 4px 10px; background: @blue-medium; color: @light-gray; border: 1px solid @blue-light; cursor: pointer; }
     canvas { width: 200px; height: 140px; position: static; }
     ul { padding: 0; margin: 0; list-style: none; }
     li { padding: 2px 0; }
