@@ -32,5 +32,15 @@
 | E.2 | Circuit navigation & VFR traffic management (5.2, 5.3) | Verified | Passed active traffic to `vfrEntry` in `AircraftController.createVfrArrival()`, added `octa`, `dw`, `xw`, `base`, `final` to `assets/autocomplete/commandAutocompleteConfig.json`. |
 | E.3 | Australian phraseology (7) | Verified | Verified centralised `radioUtilities.js` & `speech.js` (`ControllerSpokenText.spec.js`), plus Australian unable-heading/clearance/missed-approach readbacks. |
 | E.4 | Radar interface: frequency panel, data blocks, keyboard controls (8) | Verified | Added active controller indicator and click-to-compose handoff in `UiController._updateFrequencyPanel()`, compact status badges (`VFR`, controller, `HO`/`OVD`, `OCTA`, `INF`/`PINF`, `GA`, `CONF`/`PCONF`) in `CanvasController._drawSingleAircraftDataBlock()`, verified `ScopeControls.spec.js`. |
-| F.1 | Required integration scenarios (10.1–24) | Pending | |
-| F.2 | Final validation, benchmarks, and documentation | Pending | |
+| F.1 | Required integration scenarios (10.1–24) | Verified | Added `test/aircraft/AustralianOperationalStability.spec.js` covering OCTA protection, shelf climb protection, scoped entry clearances, OCTA revocation, VFR circuit + Tower handoff, IFR ILS handoff, missed handoff go-around + resequencing, runway sequencing, arrival/departure conflicts, wrong frequency, approach cancellation, runway reassignment, direct-to OCTA, OpenAir diagnostics, airport switching, ownership rejection, non-AU regression, pure trajectory, and removal cleanup. |
+| F.2 | Final validation, benchmarks, and documentation | Verified | Measured headless mixed IFR/VFR YSSY benchmark: 20 ac (`5.31 ms/tick`, `4.86 ms/tick` pred, `60.0` est. FPS), 50 ac (`10.39 ms/tick`, `9.87 ms/tick` pred, `60.0` est. FPS), 100 ac (`19.34 ms/tick`, `18.43 ms/tick` pred, `51.7` est. FPS). Full `npm test`, `npm run build`, and `npm run validator:yssy` passed. |
+
+---
+
+## Performance Benchmark Results (Headless Node v24.12.0, YSSY Mixed IFR/VFR)
+
+| Aircraft | Ticks | Total (ms) | Sim Update (ms/tick) | Prediction (ms/tick) | Est. Headless FPS |
+| ---: | ---: | ---: | ---: | ---: | ---: |
+| 20 | 20 | 106.23 | 5.31 | 4.86 | 60.0 |
+| 50 | 20 | 207.70 | 10.39 | 9.87 | 60.0 |
+| 100 | 20 | 386.89 | 19.34 | 18.43 | 51.7 |

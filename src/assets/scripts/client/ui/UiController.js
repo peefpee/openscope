@@ -642,12 +642,12 @@ class UiController {
         const adjacentFrequencies = controllerConfig.getAdjacentFrequencyList();
 
         if (controllerConfig.approach && controllerConfig.approach.frequency) {
-            const $active = $('<li class="frequency-panel-row is-active"></li>');
-            $active.text(`* ${controllerConfig.approach.callsign} ${controllerConfig.approach.frequency}`);
+            const $active = $('<div class="frequency-panel-active"></div>');
+            $active.text(`Active: ${controllerConfig.approach.callsign} ${controllerConfig.approach.frequency}`);
             if (controllerConfig.approach.radioName) {
                 $active.prop('title', `${controllerConfig.approach.radioName} (Active)`);
             }
-            $list.append($active);
+            this.$frequencyPanel.append($active);
         }
 
         adjacentFrequencies.forEach(({ callsign, frequency, radioName, type }) => {

@@ -1067,7 +1067,7 @@ export default class AircraftModel {
 
         this.mcp.setAltitudeFieldValue(nextAltitudeToMaintain);
         this.mcp.setAltitudeHold();
-        this.mcp.setHeadingFieldValue(runwayModel ? runwayModel.angle : this.heading);
+        this.mcp.setHeadingFieldValue(this.isAustralianOperation() && runwayModel ? runwayModel.angle : this.heading);
         this.mcp.setHeadingHold();
         this.setFlightPhase(FLIGHT_PHASE.DESCENT);
         if (airport && airport.towerController && this.controllerState.currentController === CONTROLLER_TYPE.TWR) {
