@@ -411,7 +411,13 @@ export default class AirportModel {
         this.defaultWind.angle = degreesToRadians(data.wind.angle);
 
         this._initRangeRings(data.rangeRings);
-        this.loadTerrain();
+        this.terrain = {};
+        this._terrainLevels = [];
+        if (data.terrainGeoJson && Array.isArray(data.terrainGeoJson.features)) {
+            this.attachTerrainGeoJson(data.terrainGeoJson);
+        } else {
+            this.loadTerrain();
+        }
         this.buildAirspace(data.airspace);
         if (isAustralianAirport(this.icao)) {
             this._australianData = data;
@@ -880,6 +886,15 @@ export default class AirportModel {
             });
         });
         this._terrainLevels = Object.keys(this.terrain).map(Number).sort((a, b) => b - a);
+    }
+
+    attachTerrainGeoJson(geojson) {
+        if (!geojson || !Array.isArray(geojson.features)) {
+            return false;
+        }
+        this.parseTerrain(geojson);
+        this.has_terrain = Object.keys(this.terrain || {}).length > 0;
+        return this.has_terrain;
     }
 
     /**

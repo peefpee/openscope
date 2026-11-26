@@ -50,6 +50,28 @@
             <label for="dat-centre-radio-name">Centre radio name</label>
             <input id="dat-centre-radio-name" type="text" maxlength="80" placeholder="e.g. Melbourne Centre">
         </div>
+        <div class="dat-terrain-section" hidden>
+            <label><input id="dat-terrain-auto" type="checkbox" checked> Automatically generate terrain</label>
+            <label for="dat-terrain-provider">Terrain source</label>
+            <select id="dat-terrain-provider">
+                <option value="auto">Auto (GA SRTM / Copernicus DEM)</option>
+                <option value="open-meteo">Open-Meteo (Copernicus GLO-90)</option>
+            </select>
+            <label for="dat-terrain-coverage">Terrain coverage</label>
+            <select id="dat-terrain-coverage">
+                <option value="40">40 NM</option>
+                <option value="60" selected>60 NM</option>
+                <option value="80">80 NM</option>
+                <option value="auto">Auto (airspace extent)</option>
+            </select>
+            <label for="dat-terrain-file">Manual terrain GeoJSON <small>Optional · .geojson</small></label>
+            <input id="dat-terrain-file" type="file" accept=".geojson,.json">
+            <p class="dat-terrain-status" role="status"></p>
+            <div class="dat-terrain-actions">
+                <button type="button" class="dat-terrain-regen">Regenerate terrain</button>
+                <button type="button" class="dat-terrain-clear">Clear terrain</button>
+            </div>
+        </div>
         <p>Opening this scope starts a new session with simulated arrivals and departures in a 40 NM practice sector. Use the SID and STAR radar controls to display flyable procedures.</p>
         <button type="button" class="dat-open">Open imported scope</button>
     </footer>

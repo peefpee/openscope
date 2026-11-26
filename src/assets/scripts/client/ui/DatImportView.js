@@ -11,6 +11,7 @@ import {
 } from '../constants/controllerConstants';
 import { parseAirportDat } from '../airport/dat/parseAirportDat';
 import { buildDatScope, resolveWaypoints } from '../airport/dat/buildDatScope';
+import { fetchAndGenerateTerrain } from '../airport/dat/terrainGenerator';
 
 function readFile(file) {
     return new Promise((resolve, reject) => {
@@ -73,6 +74,7 @@ export default class DatImportView {
         this.onMsaChange = onMsaChange;
         this.version = 0;
         this.pending = Promise.resolve();
+        this._terrainAbort = null;
         this.$toggle.on('click.datImport', () => {
             this.$dialog[0].showModal();
             this.update();
@@ -82,7 +84,32 @@ export default class DatImportView {
             const { id, files } = event.target;
             const file = files[0];
             event.target.value = '';
-            if (file) this.update(() => this.importFile(id, file));
+            if (file) {
+                if (id === 'dat-terrain-file') {
+                    this.importTerrainGeoJson(file);
+                } else {
+                    this.update(() => this.importFile(id, file));
+                }
+            }
+        });
+        this.$dialog.on('click.datImport', '.dat-terrain-regen', () => {
+            if (this.scope) {
+                this._loadOrGenerateTerrain(this.scope, { force: true });
+            }
+        });
+        this.$dialog.on('click.datImport', '.dat-terrain-clear', () => {
+            if (this.scope) {
+                if (this._terrainAbort) this._terrainAbort.abort();
+                this.scope.terrainGeoJson = null;
+                this.scope.has_terrain = false;
+                navData.clearTerrain(this.scope.icao);
+                this.$dialog.find('.dat-terrain-status').text(`Cleared cached terrain for ${this.scope.icao}.`);
+            }
+        });
+        this.$dialog.on('change.datImport', '#dat-terrain-coverage, #dat-terrain-provider, #dat-terrain-auto', () => {
+            if (this.scope) {
+                this._loadOrGenerateTerrain(this.scope, { force: false });
+            }
         });
         this.$dialog.on('change.datImport', '#dat-cached-airport', (event) => {
             const key = event.target.value;
@@ -327,7 +354,113 @@ export default class DatImportView {
             status.push('A pair of reciprocal runway thresholds is required to open the scope.');
         }
         $status.text(status.join(' '));
+        this.$dialog.find('.dat-terrain-section').prop('hidden', !this.scope);
         this.$dialog.find('footer').prop('hidden', !this.scope);
+        if (this.scope) {
+            this._loadOrGenerateTerrain(this.scope, { force: false });
+        }
+    }
+
+    _resolveTerrainCoverageNm(scope) {
+        const val = this.$dialog.find('#dat-terrain-coverage').val();
+        if (val === 'auto') {
+            const radiusKm = scope.ctr_radius || 74;
+            return Math.min(80, Math.max(40, Math.ceil((radiusKm / 1.852) * 1.25 / 10) * 10));
+        }
+        return Number(val) || 60;
+    }
+
+    importTerrainGeoJson(file) {
+        if (!this.scope) return;
+        const targetIcao = this.scope.icao;
+        readFile(file).then((text) => {
+            const geojson = JSON.parse(text);
+            if (!geojson || geojson.type !== 'FeatureCollection' || !Array.isArray(geojson.features)) {
+                throw new Error('Invalid GeoJSON FeatureCollection.');
+            }
+            if (!this.scope || this.scope.icao !== targetIcao) return;
+            this.scope.terrainGeoJson = geojson;
+            this.scope.has_terrain = geojson.features.length > 0;
+            const coverageNm = this._resolveTerrainCoverageNm(this.scope);
+            navData.saveTerrain({
+                icao: targetIcao,
+                coordinates: this.scope.position,
+                coverageNm,
+                provider: 'manual',
+                attribution: 'Manual GeoJSON upload',
+                geojson
+            });
+            this.$dialog.find('.dat-terrain-status').text(`Loaded manual terrain (${geojson.features.length} features).`);
+        }).catch((err) => {
+            this.$dialog.find('.dat-terrain-status').text(`Terrain upload failed: ${err.message}`);
+        });
+    }
+
+    _loadOrGenerateTerrain(scope, { force = false } = {}) {
+        if (!scope || !Array.isArray(scope.position)) return;
+        const $terrainStatus = this.$dialog.find('.dat-terrain-status');
+        const coverageNm = this._resolveTerrainCoverageNm(scope);
+        const provider = this.$dialog.find('#dat-terrain-provider').val() || 'auto';
+        const autoEnabled = this.$dialog.find('#dat-terrain-auto').prop('checked');
+        const targetIcao = scope.icao;
+
+        if (this._terrainAbort) {
+            this._terrainAbort.abort();
+            this._terrainAbort = null;
+        }
+
+        if (!force) {
+            $terrainStatus.text(`Checking cached terrain for ${targetIcao}...`);
+            const cached = navData.getTerrain(targetIcao, { coverageNm });
+            if (cached && cached.geojson) {
+                scope.terrainGeoJson = cached.geojson;
+                scope.has_terrain = true;
+                $terrainStatus.text(`Terrain ready (cached): ${coverageNm} NM coverage.`);
+                return;
+            }
+        }
+
+        if (!autoEnabled && !force) {
+            $terrainStatus.text('Automatic terrain generation disabled.');
+            return;
+        }
+
+        const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
+        this._terrainAbort = controller;
+        const { version } = this;
+
+        fetchAndGenerateTerrain({
+            icao: targetIcao,
+            lat: scope.position[0],
+            lon: scope.position[1],
+            coverageNm,
+            contourIntervalFt: 1000,
+            provider,
+            signal: controller ? controller.signal : null,
+            onProgress: (msg) => {
+                if (version === this.version && this.scope && this.scope.icao === targetIcao) {
+                    $terrainStatus.text(msg);
+                }
+            }
+        }).then((result) => {
+            if (version !== this.version || !this.scope || this.scope.icao !== targetIcao) return;
+            scope.terrainGeoJson = result.geojson;
+            scope.has_terrain = true;
+            navData.saveTerrain({
+                icao: targetIcao,
+                coordinates: scope.position,
+                coverageNm,
+                provider: result.provider,
+                resolution: result.resolution,
+                attribution: result.attribution,
+                geojson: result.geojson
+            });
+            $terrainStatus.text(`Terrain ready: ${coverageNm} NM coverage (${result.attribution}).`);
+        }).catch((err) => {
+            if (err && err.name === 'AbortError') return;
+            if (version !== this.version || !this.scope || this.scope.icao !== targetIcao) return;
+            $terrainStatus.text(`Terrain unavailable: ${err.message}. You can still open the scope without terrain.`);
+        });
     }
 
     destroy() {

@@ -57,6 +57,60 @@ export class NavDataCache {
             });
         });
     }
+
+    getTerrain(icao, { coverageNm } = {}) {
+        const code = String(icao || '').trim().toUpperCase();
+        if (!code) return null;
+        const record = this.records.get(`terrain/${code}`);
+        if (!record || record.formatVersion !== 1 || !record.geojson) return null;
+        if (coverageNm != null && record.coverageNm !== coverageNm) return null;
+        return record;
+    }
+
+    saveTerrain(entry) {
+        const code = String((entry && entry.icao) || '').trim().toUpperCase();
+        if (!code || !entry.geojson) return Promise.resolve();
+        const record = {
+            key: `terrain/${code}`,
+            icao: code,
+            coordinates: entry.coordinates || null,
+            coverageNm: entry.coverageNm || 60,
+            provider: entry.provider || 'open-meteo',
+            datasetVersion: entry.datasetVersion || '1',
+            resolution: entry.resolution || '21x21',
+            contourIntervalFt: entry.contourIntervalFt || 1000,
+            generatedAt: entry.generatedAt || new Date().toISOString(),
+            geojson: entry.geojson,
+            attribution: entry.attribution || '',
+            formatVersion: 1
+        };
+        // Enforce bounded cache size (max 10 terrain entries, evicting oldest)
+        const terrainEntries = [...this.records.values()]
+            .filter((r) => r && typeof r.key === 'string' && r.key.startsWith('terrain/') && r.key !== record.key)
+            .sort((a, b) => String(a.generatedAt || '').localeCompare(String(b.generatedAt || '')));
+        while (terrainEntries.length >= 10) {
+            const oldest = terrainEntries.shift();
+            if (oldest) this.records.delete(oldest.key);
+        }
+        return this.save(record);
+    }
+
+    clearTerrain(icao) {
+        const code = String(icao || '').trim().toUpperCase();
+        if (!code) return Promise.resolve();
+        const key = `terrain/${code}`;
+        this.records.delete(key);
+        this.memoryOnly.delete(key);
+        return this.load().then(() => {
+            if (!this.db) return;
+            return new Promise((resolve) => {
+                const tx = this.db.transaction('files', 'readwrite');
+                tx.oncomplete = resolve;
+                tx.onabort = resolve;
+                tx.objectStore('files').delete(key);
+            }).catch(() => {});
+        });
+    }
 }
 
 export default new NavDataCache();
