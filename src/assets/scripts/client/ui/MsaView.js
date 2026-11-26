@@ -78,12 +78,14 @@ export default class MsaView {
             }
             event.stopPropagation();
         });
-        $(document).off('.msa').on('keydown.msa', (event) => {
-            if (event.key === 'Escape' && this._isOpen) {
-                event.preventDefault();
-                this.setOpen(false);
-            }
-        });
+        if (typeof document !== 'undefined') {
+            $(document).off('.msa').on('keydown.msa', (event) => {
+                if (event.key === 'Escape' && this._isOpen) {
+                    event.preventDefault();
+                    this.setOpen(false);
+                }
+            });
+        }
     }
 
     isOpen() {
@@ -95,7 +97,7 @@ export default class MsaView {
         this._loadToken += 1;
         const token = this._loadToken;
 
-        if (nextOpen && !this._isOpen) {
+        if (nextOpen && !this._isOpen && typeof document !== 'undefined') {
             this._previousFocus = document.activeElement;
         }
 
@@ -117,7 +119,7 @@ export default class MsaView {
                 closeBtn.focus();
             }
         } else if (this._previousFocus && typeof this._previousFocus.focus === 'function' &&
-            document.contains(this._previousFocus)) {
+            typeof document !== 'undefined' && document.contains(this._previousFocus)) {
             this._previousFocus.focus();
             this._previousFocus = null;
         }
@@ -174,7 +176,9 @@ export default class MsaView {
     destroy() {
         this.setOpen(false);
         this.$toggle.off('.msa');
-        $(document).off('.msa');
+        if (typeof document !== 'undefined') {
+            $(document).off('.msa');
+        }
         this.$panel.off('.msa').find('button, select').off('.msa');
     }
 }

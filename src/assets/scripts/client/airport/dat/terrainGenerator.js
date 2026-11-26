@@ -281,7 +281,7 @@ export function generateTerrainGeoJson(grid, bounds, options = {}) {
  * Fetch elevation grid from Open-Meteo Elevation API (Copernicus DEM GLO-90, CC BY 4.0)
  * or server-side /api/terrain endpoint, with timeout and abort support.
  */
-export async function fetchAndGenerateTerrain({
+export function fetchAndGenerateTerrain({
     icao,
     lat,
     lon,
@@ -296,13 +296,10 @@ export async function fetchAndGenerateTerrain({
 
     onProgress('Downloading elevation data...');
 
-    // Try backend /api/terrain first when running against the Express server
-    if (typeof window !== 'undefined' && window.location && window.location.protocol !== 'file:') {
-        try {
-            const url = `/api/terrain?icao=${encodeURIComponent(icao)}&lat=${lat}&lon=${lon}&coverageNm=${coverageNm}&intervalFt=${contourIntervalFt}&provider=${encodeURIComponent(provider)}`;
-            const resp = await fetch(url, { signal });
-            if (resp.ok) {
-                const payload = await resp.json();
+    const tryServer = (typeof window !== 'undefined' && window.location && window.location.protocol !== 'file:') ?
+        fetch(`/api/terrain?icao=${encodeURIComponent(icao)}&lat=${lat}&lon=${lon}&coverageNm=${coverageNm}&intervalFt=${contourIntervalFt}&provider=${encodeURIComponent(provider)}`, { signal })
+            .then((resp) => (resp.ok ? resp.json() : null))
+            .then((payload) => {
                 if (payload && Array.isArray(payload.elevations) && payload.gridSize && payload.bounds) {
                     const serverGrid = [];
                     for (let r = 0; r < payload.gridSize; r++) {
@@ -316,59 +313,68 @@ export async function fetchAndGenerateTerrain({
                         resolution: `${payload.gridSize}x${payload.gridSize}`
                     };
                 }
+                return null;
+            })
+            .catch((err) => {
+                if (err && err.name === 'AbortError') throw err;
+                return null;
+            }) :
+        Promise.resolve(null);
+
+    return tryServer.then((serverResult) => {
+        if (serverResult) return serverResult;
+
+        const lats = [];
+        const lons = [];
+        for (let r = 0; r < gridSize; r++) {
+            const rowLat = bounds.minLat + (bounds.maxLat - bounds.minLat) * r / (gridSize - 1);
+            for (let c = 0; c < gridSize; c++) {
+                const colLon = bounds.minLon + (bounds.maxLon - bounds.minLon) * c / (gridSize - 1);
+                lats.push(rowLat.toFixed(5));
+                lons.push(colLon.toFixed(5));
             }
-        } catch (err) {
-            if (err && err.name === 'AbortError') throw err;
-            // Fall through to direct client-side Open-Meteo fetch
         }
-    }
 
-    // Direct Open-Meteo Elevation API fallback (Copernicus DEM GLO-90, CC BY 4.0, no API key required)
-    const lats = [];
-    const lons = [];
-    for (let r = 0; r < gridSize; r++) {
-        const rowLat = bounds.minLat + (bounds.maxLat - bounds.minLat) * r / (gridSize - 1);
-        for (let c = 0; c < gridSize; c++) {
-            const colLon = bounds.minLon + (bounds.maxLon - bounds.minLon) * c / (gridSize - 1);
-            lats.push(rowLat.toFixed(5));
-            lons.push(colLon.toFixed(5));
+        const batches = [];
+        const batchSize = 100;
+        for (let i = 0; i < lats.length; i += batchSize) {
+            const batchLats = lats.slice(i, i + batchSize).join(',');
+            const batchLons = lons.slice(i, i + batchSize).join(',');
+            batches.push(`https://api.open-meteo.com/v1/elevation?latitude=${batchLats}&longitude=${batchLons}`);
         }
-    }
 
-    const elevations = [];
-    const batchSize = 100;
-    for (let i = 0; i < lats.length; i += batchSize) {
-        const batchLats = lats.slice(i, i + batchSize).join(',');
-        const batchLons = lons.slice(i, i + batchSize).join(',');
-        const apiUrl = `https://api.open-meteo.com/v1/elevation?latitude=${batchLats}&longitude=${batchLons}`;
-        const resp = await fetch(apiUrl, { signal });
-        if (!resp.ok) {
-            throw new Error(`Terrain provider returned HTTP ${resp.status}`);
-        }
-        const json = await resp.json();
-        if (!json || !Array.isArray(json.elevation)) {
-            throw new Error('Malformed elevation response from provider');
-        }
-        elevations.push(...json.elevation);
-    }
+        const elevations = [];
+        return batches.reduce((chain, apiUrl) => chain.then(() => fetch(apiUrl, { signal })
+            .then((resp) => {
+                if (!resp.ok) throw new Error(`Terrain provider returned HTTP ${resp.status}`);
+                return resp.json();
+            })
+            .then((json) => {
+                if (!json || !Array.isArray(json.elevation)) {
+                    throw new Error('Malformed elevation response from provider');
+                }
+                elevations.push(...json.elevation);
+            })), Promise.resolve())
+            .then(() => {
+                onProgress('Generating terrain contours...');
+                const grid = [];
+                for (let r = 0; r < gridSize; r++) {
+                    grid.push(elevations.slice(r * gridSize, (r + 1) * gridSize));
+                }
 
-    onProgress('Generating terrain contours...');
-    const grid = [];
-    for (let r = 0; r < gridSize; r++) {
-        grid.push(elevations.slice(r * gridSize, (r + 1) * gridSize));
-    }
+                const attribution = 'Copernicus DEM GLO-90 via Open-Meteo (CC BY 4.0)';
+                const geojson = generateTerrainGeoJson(grid, bounds, {
+                    icao,
+                    contourIntervalFt,
+                    attribution
+                });
 
-    const attribution = 'Copernicus DEM GLO-90 via Open-Meteo (CC BY 4.0)';
-    const geojson = generateTerrainGeoJson(grid, bounds, {
-        icao,
-        contourIntervalFt,
-        attribution
+                return {
+                    geojson,
+                    provider: 'open-meteo',
+                    attribution,
+                    resolution: `${gridSize}x${gridSize}`
+                };
+            });
     });
-
-    return {
-        geojson,
-        provider: 'open-meteo',
-        attribution,
-        resolution: `${gridSize}x${gridSize}`
-    };
 }

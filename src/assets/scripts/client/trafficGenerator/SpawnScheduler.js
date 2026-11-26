@@ -79,9 +79,12 @@ class SpawnScheduler {
             return this._departuresEnabled;
         }
         try {
-            const stored = window.localStorage && window.localStorage.getItem(this._departuresStorageKey(airport.icao));
-            if (stored === 'true') return true;
-            if (stored === 'false') return false;
+            if (typeof localStorage !== 'undefined') {
+                const key = this._departuresStorageKey(airport.icao);
+                const stored = typeof localStorage.getItem === 'function' ? localStorage.getItem(key) : localStorage[key];
+                if (stored === 'true') return true;
+                if (stored === 'false') return false;
+            }
         } catch (e) { /* ignore storage errors */ }
         return false;
     }
@@ -93,8 +96,10 @@ class SpawnScheduler {
         this._departuresAirportIcao = airport ? airport.icao : null;
         if (airport && isAustralianAirport(airport.icao)) {
             try {
-                if (window.localStorage) {
-                    window.localStorage.setItem(this._departuresStorageKey(airport.icao), String(next));
+                if (typeof localStorage !== 'undefined') {
+                    const key = this._departuresStorageKey(airport.icao);
+                    if (typeof localStorage.setItem === 'function') localStorage.setItem(key, String(next));
+                    else localStorage[key] = String(next);
                 }
             } catch (e) { /* ignore storage errors */ }
         }

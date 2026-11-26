@@ -131,6 +131,7 @@ test.serial('switching airports rejects frequencies belonging to the previous ai
     dep.setFlightPhase(FLIGHT_PHASE.CLIMB);
     dep.altitude = 5000;
     dep.speed = 250;
+    dep.setControllerState({ currentController: CONTROLLER_TYPE.APP });
     dep.isTrackingOutbound = () => true;
 
     // On YSSY, YBBB 133.150 is rejected and YMMM 132.000 is accepted
@@ -168,6 +169,7 @@ test.serial('switching airports rejects frequencies belonging to the previous ai
     dep2.setFlightPhase(FLIGHT_PHASE.CLIMB);
     dep2.altitude = 5000;
     dep2.speed = 250;
+    dep2.setControllerState({ currentController: CONTROLLER_TYPE.APP });
     dep2.isTrackingOutbound = () => true;
 
     // Previous airport's YMMM 132.000 is now rejected on YBBN; YBBB 133.150 is accepted

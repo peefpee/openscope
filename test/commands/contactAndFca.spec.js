@@ -159,6 +159,7 @@ test.serial('contact ctr and unified runCentre validate sector, eligibility, and
         depNorth.setFlightPhase(FLIGHT_PHASE.CLIMB);
         depNorth.altitude = 5000;
         depNorth.speed = 250;
+        depNorth.setControllerState({ currentController: CONTROLLER_TYPE.APP });
 
         // Not tracking outbound yet -> both contact ctr and centre must reject
         t.false(commander.run(depNorth, 'contact', ['ctr', '132.0'])[0]);
@@ -203,6 +204,7 @@ test.serial('contact ctr and unified runCentre validate sector, eligibility, and
         depSouth.setFlightPhase(FLIGHT_PHASE.CLIMB);
         depSouth.altitude = 6000;
         depSouth.speed = 250;
+        depSouth.setControllerState({ currentController: CONTROLLER_TYPE.APP });
         sinon.stub(depSouth, 'isTrackingOutbound').returns(true);
         depSouth.fms.setDepartureOutbound('KEVIN');
         const centreOk = commander.run(depSouth, 'centre', []);
@@ -244,6 +246,7 @@ test.serial('freqChangeApproved rejects IFR and airspace-ahead flights, and rele
         ifrDep.setFlightPhase(FLIGHT_PHASE.CLIMB);
         ifrDep.altitude = 5000;
         ifrDep.speed = 250;
+        ifrDep.setControllerState({ currentController: CONTROLLER_TYPE.APP });
         const ifrReject = commander.run(ifrDep, 'freqChangeApproved', []);
         t.false(ifrReject[0]);
         t.regex(ifrReject[1], /IFR/);
@@ -393,6 +396,7 @@ test.serial('freqChangeApproved rejects IFR and airspace-ahead flights, and rele
             depExit.setFlightPhase(FLIGHT_PHASE.CLIMB);
             depExit.altitude = 10000;
             depExit.speed = 350;
+            depExit.setControllerState({ currentController: CONTROLLER_TYPE.APP });
             sinon.stub(depExit, 'isTrackingOutbound').returns(true);
             depExit.fms.setDepartureOutbound('OLSEM');
 
