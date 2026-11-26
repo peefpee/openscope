@@ -1,8 +1,9 @@
-import { clearOrbit } from './Pilot/VfrArrival';
 import _has from 'lodash/has';
 import _isNil from 'lodash/isNil';
 import _map from 'lodash/map';
 import _round from 'lodash/round';
+import { clearOrbit } from './Pilot/VfrArrival';
+import TimeKeeper from '../engine/TimeKeeper';
 import AirportController from '../airport/AirportController';
 import EventBus from '../lib/EventBus';
 import GameController from '../game/GameController';
@@ -10,9 +11,17 @@ import NavigationLibrary from '../navigationLibrary/NavigationLibrary';
 import UiController from '../ui/UiController';
 import { MCP_MODE } from './ModeControl/modeControlConstants';
 import {
-    FLIGHT_PHASE
+    FLIGHT_PHASE,
+    FLIGHT_RULES
 } from '../constants/aircraftConstants';
-import { EVENT } from '../constants/eventNames';
+import {
+    CONTROLLER_TYPE,
+    HANDOFF_STATE,
+    frequenciesEqual,
+    isAustralianAirport,
+    normalizeFrequency
+} from '../constants/controllerConstants';
+import { AIRCRAFT_EVENT, EVENT } from '../constants/eventNames';
 import { radians_normalize } from '../math/circle';
 import { round } from '../math/core';
 import { AIRCRAFT_COMMAND_MAP } from '../commands/aircraftCommand/aircraftCommandMap';
@@ -21,7 +30,11 @@ import {
     radio_runway,
     radio_spellOut,
     radio_heading,
-    radio_altitude
+    radio_altitude,
+    radio_frequencySpoken,
+    radio_squawkSpoken,
+    radio_speedSpoken,
+    radio_spokenText
 } from '../utilities/radioUtilities';
 import { heading_to_string, radiansToDegrees, degreesToRadians } from '../utilities/unitConverters';
 
@@ -45,7 +58,13 @@ export default class AircraftCommander {
      * @param isPreSpawn {boolean}
      */
     runCommands(aircraft, commands, isPreSpawn = false) {
-        if (!aircraft.isControllable && !isPreSpawn) {
+        if (!isPreSpawn && !aircraft.isPlayerControlled()) {
+            if (aircraft.isAustralianOperation && aircraft.isAustralianOperation()) {
+                const reason = this._getOwnershipRejectionReason(aircraft);
+                UiController.ui_log(`${aircraft.readbackCallsign}, unable — ${reason}`, true);
+                return false;
+            }
+
             return true;
         }
 
@@ -64,9 +83,13 @@ export default class AircraftCommander {
                 continue;
             }
 
+            const wasTransferredToCentre = aircraft.transferredToCentre;
             let retval = this.run(aircraft, command, args);
-            // A successful handoff has already produced its radio call.
-            if (aircraft.transferredToCentre) break;
+
+            // A successful legacy `centre` handoff produces its radio call via AIRSPACE_EXIT.
+            if (command === 'centre' && !wasTransferredToCentre && aircraft.transferredToCentre) {
+                break;
+            }
 
             if (retval) {
                 if (!retval[0]) {
@@ -91,9 +114,13 @@ export default class AircraftCommander {
                     response_end = retval[2];
                 }
             }
+
+            if (aircraft.transferredToCentre || !aircraft.isPlayerControlled()) {
+                break;
+            }
         }
 
-        for (let i = 0; i < deferred.length && !aircraft.transferredToCentre; i += 1) {
+        for (let i = 0; i < deferred.length && !aircraft.transferredToCentre && aircraft.isPlayerControlled(); i += 1) {
             const command = deferred[i][0];
             const args = deferred[i][1];
             const retval = this.run(aircraft, command, args);
@@ -140,7 +167,7 @@ export default class AircraftCommander {
             speech_say(
                 [
                     { type: 'callsign', content: aircraft },
-                    { type: 'text', content: `${r_say} ${response_end}` }
+                    { type: 'text', content: ` ${radio_spokenText(`${r_say} ${response_end}`)}` }
                 ],
                 aircraft.pilotVoice
             );
@@ -175,7 +202,7 @@ export default class AircraftCommander {
             ['direct', 'hold', 'reroute', 'expectArrivalRunway', 'descendViaStar'].includes(command)) {
             const lnav = aircraft.mcp.headingMode === MCP_MODE.HEADING.LNAV;
             const vnav = aircraft.mcp.altitudeMode === MCP_MODE.ALTITUDE.VNAV;
-            const altitude = aircraft.mcp.altitude;
+            const { altitude } = aircraft.mcp;
             aircraft.pilot.cancelApproachClearance(aircraft);
             if (lnav) aircraft.mcp.setHeadingLnav();
             if (vnav) {
@@ -634,7 +661,7 @@ export default class AircraftCommander {
         const readback = {};
 
         readback.log = `indicating ${speed} knots`;
-        readback.say = `indicating ${radio_spellOut(speed)} knots`;
+        readback.say = `indicating ${radio_speedSpoken(speed)} knots`;
 
         return [true, readback];
     }
@@ -654,7 +681,7 @@ export default class AircraftCommander {
         const readback = {};
 
         readback.log = `assigned ${speed} knots`;
-        readback.say = `assigned ${radio_spellOut(speed)} knots}`;
+        readback.say = `assigned ${radio_speedSpoken(speed)} knots`;
 
         return [true, readback];
     }
@@ -793,19 +820,416 @@ export default class AircraftCommander {
             aircraft.target.turn = null;
             aircraft.mcp.setHeadingLnav();
         }
-        const readback = (name) => ground ? `outbound fix ${name}` : `direct ${name} for Centre`;
+        const readback = (name) => (ground ? `outbound fix ${name}` : `direct ${name} for Centre`);
         return [true, { log: readback(fix.name), say: readback(NavigationLibrary.getFixSpokenName(fix.name)) }];
     }
 
+    /**
+     * Build a clear player-facing reason why an Australian aircraft cannot be commanded.
+     *
+     * @for AircraftCommander
+     * @method _getOwnershipRejectionReason
+     * @param {AircraftModel} aircraft
+     * @return {string}
+     * @private
+     */
+    _getOwnershipRejectionReason(aircraft) {
+        const cs = aircraft.controllerState || {};
+
+        if (cs.currentController === CONTROLLER_TYPE.TWR) {
+            return aircraft.isDeparture() ?
+                'is under Tower control' :
+                'is on Tower frequency and not under your control';
+        }
+
+        if (cs.currentController === CONTROLLER_TYPE.CTR || aircraft.transferredToCentre) {
+            return 'has already been transferred to Centre';
+        }
+
+        if (cs.currentController === CONTROLLER_TYPE.UNICOM ||
+            cs.communicationReleased ||
+            cs.handoffState === HANDOFF_STATE.RELEASED) {
+            return 'has already been released from your frequency';
+        }
+
+        return 'is not currently on your frequency';
+    }
+
+    /**
+     * Transfer an aircraft to Tower or Centre on an explicit VHF frequency.
+     *
+     * @for AircraftCommander
+     * @method runContact
+     * @param {AircraftModel} aircraft
+     * @param {Array<string>} data - [controllerType ('twr'|'ctr'), frequency]
+     * @return {Array}
+     */
+    runContact(aircraft, data = []) {
+        const airport = AirportController.airport_get();
+
+        if (!airport || !isAustralianAirport(airport.icao)) {
+            return [false, 'contact command is only available at Australian airports'];
+        }
+
+        if (!aircraft.isPlayerControlled()) {
+            return [false, `unable, aircraft ${this._getOwnershipRejectionReason(aircraft)}`];
+        }
+
+        const controllerToken = String((data && data[0]) || '').trim().toLowerCase();
+
+        if (controllerToken !== 'twr' && controllerToken !== 'ctr') {
+            return [false, "unable, expected controller type 'twr' or 'ctr'"];
+        }
+
+        const normalizedFreq = normalizeFrequency(data && data[1]);
+
+        if (!normalizedFreq) {
+            return [false, 'invalid frequency; expected VHF frequency between 118.000 and 136.975'];
+        }
+
+        if (controllerToken === 'twr') {
+            return this._handoffToTower(aircraft, airport, normalizedFreq);
+        }
+
+        return this._handoffToCentre(aircraft, airport, normalizedFreq);
+    }
+
+    /**
+     * Validate and execute an arrival handoff to Tower.
+     *
+     * @for AircraftCommander
+     * @method _handoffToTower
+     * @param {AircraftModel} aircraft
+     * @param {AirportModel} airport
+     * @param {string} normalizedFreq
+     * @return {Array}
+     * @private
+     */
+    _handoffToTower(aircraft, airport, normalizedFreq) {
+        if (!aircraft.isArrival()) {
+            return [false, 'unable, Tower handoff applies to arrivals only'];
+        }
+
+        if (aircraft.isOnGround()) {
+            return [false, 'unable, already on the ground'];
+        }
+
+        const cs = aircraft.controllerState || {};
+
+        if (cs.currentController === CONTROLLER_TYPE.TWR) {
+            return [false, 'already transferred to Tower'];
+        }
+
+        const runwayModel = aircraft.fms && aircraft.fms.arrivalRunwayModel;
+
+        if (!runwayModel) {
+            return [false, 'unable, no arrival runway assigned'];
+        }
+
+        const config = airport.controllerConfig;
+
+        if (!config || !Array.isArray(config.tower) || config.tower.length === 0) {
+            return [false, 'unable, no Tower frequency configured'];
+        }
+
+        const matchesAnyTower = config.tower.some((t) => frequenciesEqual(normalizedFreq, t.frequency));
+
+        if (!matchesAnyTower) {
+            return [false, `unable, ${normalizedFreq} is not a valid Tower frequency`];
+        }
+
+        const expectedTower = config.getTowerForRunway(runwayModel.name);
+
+        if (!expectedTower || !frequenciesEqual(normalizedFreq, expectedTower.frequency)) {
+            const expectedLabel = expectedTower ?
+                `${expectedTower.callsign} on ${expectedTower.frequency}` :
+                'a different Tower frequency';
+            return [false, `unable, Runway ${runwayModel.name} uses ${expectedLabel}`];
+        }
+
+        if (aircraft.rules !== FLIGHT_RULES.VFR) {
+            const eligible = airport.towerController ?
+                airport.towerController.isArrivalEligibleForTowerHandoff(aircraft) :
+                Boolean(aircraft.pilot && aircraft.pilot.hasApproachClearance && aircraft.isEstablishedOnCourse());
+
+            if (!eligible) {
+                if (!(aircraft.pilot && aircraft.pilot.hasApproachClearance)) {
+                    return [false, 'unable, not cleared for approach'];
+                }
+
+                return [false, 'unable, not yet established on final approach'];
+            }
+        }
+
+        const eventKey = cs.handoffEventId || aircraft.generateHandoffEventId('twr');
+
+        aircraft.setControllerState({
+            currentController: CONTROLLER_TYPE.TWR,
+            currentFrequency: expectedTower.frequency,
+            handoffState: HANDOFF_STATE.COMPLETED,
+            targetController: CONTROLLER_TYPE.TWR,
+            targetFrequency: expectedTower.frequency,
+            handoffRequired: false,
+            handoffCompleted: true,
+            handoffDeadline: null,
+            communicationReleased: false
+        });
+
+        if (!aircraft.projected) {
+            if (airport.towerController && airport.towerController._arrivals) {
+                airport.towerController._arrivals.add(aircraft.id);
+            }
+
+            EventBus.trigger(AIRCRAFT_EVENT.TOWER_HANDOFF, {
+                aircraft,
+                eventKey,
+                frequency: expectedTower.frequency,
+                controller: expectedTower.callsign
+            });
+        }
+
+        const spokenName = config.getRadioNameForController(expectedTower, CONTROLLER_TYPE.TWR) || expectedTower.callsign;
+        const log = `contact ${expectedTower.callsign} on ${expectedTower.frequency}`;
+        const say = `contact ${spokenName} on ${radio_frequencySpoken(expectedTower.frequency)}`;
+
+        return [true, { log, say }];
+    }
+
+    /**
+     * Validate and execute a departure handoff to Centre.
+     * Shared by `contact ctr [freq]` and Australian `centre`/`center`.
+     *
+     * @for AircraftCommander
+     * @method _handoffToCentre
+     * @param {AircraftModel} aircraft
+     * @param {AirportModel} airport
+     * @param {string|null} normalizedFreq
+     * @param {Object} [options={}]
+     * @return {Array}
+     * @private
+     */
+    _handoffToCentre(aircraft, airport, normalizedFreq, options = {}) {
+        if (!aircraft.isDeparture()) {
+            return [false, 'unable, Centre handoff applies to departures only'];
+        }
+
+        if (!aircraft.isAirborne()) {
+            return [false, 'unable until airborne and tracking the outbound fix'];
+        }
+
+        const cs = aircraft.controllerState || {};
+
+        if (cs.currentController === CONTROLLER_TYPE.CTR || aircraft.transferredToCentre) {
+            return [false, 'already transferred to Centre'];
+        }
+
+        const config = airport.controllerConfig;
+        const hasCentres = Boolean(config && Array.isArray(config.centre) && config.centre.length > 0);
+        let targetSector = null;
+
+        if (hasCentres) {
+            if (!normalizedFreq) {
+                return [false, 'invalid frequency; expected VHF frequency between 118.000 and 136.975'];
+            }
+
+            const matchedSector = config.centre.find((sector) => frequenciesEqual(normalizedFreq, sector.frequency));
+
+            if (!matchedSector) {
+                return [false, `unable, ${normalizedFreq} is not a valid Centre frequency`];
+            }
+
+            const expectedSector = typeof config.selectCentreSector === 'function' ?
+                config.selectCentreSector(aircraft, airport) :
+                config.getPrimaryCentre();
+
+            if (expectedSector && !frequenciesEqual(normalizedFreq, expectedSector.frequency)) {
+                return [false, `unable, expected ${expectedSector.callsign} on ${expectedSector.frequency}`];
+            }
+
+            targetSector = matchedSector;
+        } else {
+            targetSector = {
+                callsign: 'Centre',
+                frequency: normalizedFreq
+            };
+        }
+
+        const eligible = airport.centreController ?
+            airport.centreController.isDepartureEligibleForCentreHandoff(aircraft) :
+            (aircraft.isTrackingOutbound() || !aircraft.isInsideAirspace(airport));
+
+        if (!eligible) {
+            return [false, 'unable until airborne and tracking the outbound fix'];
+        }
+
+        const eventKey = cs.handoffEventId || aircraft.generateHandoffEventId('ctr');
+
+        aircraft.setControllerState({
+            currentController: CONTROLLER_TYPE.CTR,
+            currentFrequency: targetSector.frequency,
+            handoffState: HANDOFF_STATE.COMPLETED,
+            targetController: CONTROLLER_TYPE.CTR,
+            targetFrequency: targetSector.frequency,
+            handoffRequired: false,
+            handoffCompleted: true,
+            handoffDeadline: null,
+            communicationReleased: false
+        });
+        if (!aircraft.projected) {
+            aircraft.transferredToCentre = true;
+            aircraft.syncControllabilityFromControllerState();
+
+            if (!aircraft.isInsideAirspace(airport)) {
+                aircraft.setIsRemovable();
+            }
+
+            if (airport.centreController && airport.centreController._aircraft) {
+                airport.centreController._aircraft.add(aircraft.id);
+            }
+
+            EventBus.trigger(AIRCRAFT_EVENT.CENTRE_HANDOFF, {
+                aircraft,
+                eventKey,
+                frequency: targetSector.frequency,
+                controller: targetSector.callsign
+            });
+            EventBus.trigger(AIRCRAFT_EVENT.AIRSPACE_EXIT, aircraft);
+        }
+
+        if (options.legacyReadback) {
+            return [true, 'roger'];
+        }
+
+        const spokenName = (config && typeof config.getRadioNameForController === 'function' &&
+            config.getRadioNameForController(targetSector, CONTROLLER_TYPE.CTR)) || targetSector.callsign;
+        const log = `contact ${targetSector.callsign} on ${targetSector.frequency}`;
+        const say = `contact ${spokenName} on ${radio_frequencySpoken(targetSector.frequency)}`;
+
+        return [true, { log, say }];
+    }
+
+    /**
+     * Release an eligible aircraft from player frequency into uncontrolled airspace.
+     *
+     * @for AircraftCommander
+     * @method runFreqChangeApproved
+     * @param {AircraftModel} aircraft
+     * @return {Array}
+     */
+    runFreqChangeApproved(aircraft) {
+        const airport = AirportController.airport_get();
+
+        if (!airport || !isAustralianAirport(airport.icao)) {
+            return [false, 'frequency change approved is only available at Australian airports'];
+        }
+
+        if (!aircraft.isPlayerControlled()) {
+            return [false, `unable, aircraft ${this._getOwnershipRejectionReason(aircraft)}`];
+        }
+
+        const config = airport.controllerConfig;
+
+        if (config && typeof config.evaluateFcaEligibility === 'function') {
+            const evaluation = config.evaluateFcaEligibility(aircraft, airport);
+
+            if (!evaluation.eligible) {
+                return [false, evaluation.reason || 'unable, aircraft is not clear to leave controlled frequency'];
+            }
+        } else {
+            if (aircraft.rules !== FLIGHT_RULES.VFR) {
+                return [false, 'unable, IFR flights require Centre handoff'];
+            }
+
+            if (!aircraft.isAirborne()) {
+                return [false, 'unable while on the ground'];
+            }
+        }
+
+        if (airport.centreController &&
+            typeof airport.centreController.isFcaEligible === 'function' &&
+            !airport.centreController.isFcaEligible(aircraft)) {
+            return [false, 'unable, aircraft is not clear to leave controlled frequency'];
+        }
+
+        const cs = aircraft.controllerState || {};
+        const eventKey = cs.handoffEventId || aircraft.generateHandoffEventId('fca');
+
+        aircraft.setControllerState({
+            currentController: CONTROLLER_TYPE.NONE,
+            currentFrequency: null,
+            handoffState: HANDOFF_STATE.RELEASED,
+            targetController: CONTROLLER_TYPE.NONE,
+            targetFrequency: null,
+            handoffRequired: false,
+            handoffCompleted: true,
+            handoffDeadline: null,
+            communicationReleased: true
+        });
+
+        if (!aircraft.projected && !aircraft.isInsideAirspace(airport)) {
+            aircraft.setIsRemovable();
+        }
+
+        if (!aircraft.projected) {
+            EventBus.trigger(AIRCRAFT_EVENT.FREQ_CHANGE_APPROVED, {
+                aircraft,
+                eventKey
+            });
+        }
+
+        return [true, { log: 'frequency change approved, good day', say: 'frequency change approved, good day' }];
+    }
+
     runCentre(aircraft) {
-        if (!aircraft.isDeparture()) return [false, 'Centre transfer applies to departures'];
-        if (!aircraft.transferToCentre()) return [false, 'unable until airborne and tracking the outbound fix'];
-        return [true, 'roger'];
+        const airport = AirportController.airport_get();
+
+        if (!airport || !isAustralianAirport(airport.icao)) {
+            if (!aircraft.isDeparture()) return [false, 'Centre transfer applies to departures'];
+            if (!aircraft.transferToCentre()) return [false, 'unable until airborne and tracking the outbound fix'];
+            return [true, 'roger'];
+        }
+
+        if (!aircraft.isPlayerControlled()) {
+            return [false, `unable, aircraft ${this._getOwnershipRejectionReason(aircraft)}`];
+        }
+
+        const config = airport.controllerConfig;
+        let expectedSector = null;
+
+        if (config && typeof config.selectCentreSector === 'function') {
+            expectedSector = config.selectCentreSector(aircraft, airport);
+        } else if (config && typeof config.getPrimaryCentre === 'function') {
+            expectedSector = config.getPrimaryCentre();
+        }
+
+        const freq = expectedSector ? expectedSector.frequency : null;
+        return this._handoffToCentre(aircraft, airport, freq, { legacyReadback: true });
+    }
+
+    runClearEntry(aircraft) {
+        const airport = AirportController.current;
+        if (!/^Y/i.test(airport.icao) || aircraft.rules !== 'vfr' || aircraft.isOnGround()) {
+            return [false, 'airborne Australian VFR only'];
+        }
+        aircraft.entryClearance = {
+            airport: airport.icao,
+            issuer: aircraft.controllerState.currentController,
+            issued: TimeKeeper.accumulatedDeltaTime,
+            ceiling: airport.ctr_ceiling
+        };
+        aircraft.controllerState.airspaceEntryCleared = true;
+        aircraft.octaRequired = false;
+        aircraft.octaGuidance = null;
+        aircraft.predictedEntry = null;
+        return [true, 'cleared to enter controlled airspace'];
     }
 
     runOcta(aircraft) {
         if (aircraft.rules !== 'vfr' || aircraft.isOnGround() || !/^Y/i.test(AirportController.current.icao)) {
             return [false, 'airborne Australian VFR arrivals only'];
+        }
+        if (AirportController.current.isPointWithinAirspace(aircraft.relativePosition, aircraft.altitude)) {
+            return [false, 'already inside controlled airspace, request exit instructions'];
         }
         if (!aircraft.vfrOrbit) {
             const orbit = clearOrbit(AirportController.current, aircraft.positionModel, aircraft.altitude);
@@ -817,6 +1241,10 @@ export default class AircraftCommander {
             aircraft.target.turn = null;
             aircraft.vfrOrbit = orbit;
         }
+        aircraft.octaRequired = true;
+        aircraft.nextOctaCheck = 0;
+        aircraft.entryClearance = null;
+        aircraft.controllerState.airspaceEntryCleared = false;
         return [true, 'remaining outside controlled airspace'];
     }
 
@@ -850,13 +1278,13 @@ export default class AircraftCommander {
         const result = this._onChangeTransponderCode(squawk, aircraft);
         let readback = {
             log: `squawk ${squawk}`,
-            say: `squawk ${radio_spellOut(squawk)}`
+            say: `squawk ${radio_squawkSpoken(squawk)}`
         };
 
         if (!result) {
             readback = {
                 log: `unable to squawk ${squawk}`,
-                say: `unable to squawk ${radio_spellOut(squawk)}`
+                say: `unable to squawk ${radio_squawkSpoken(squawk)}`
             };
         }
 

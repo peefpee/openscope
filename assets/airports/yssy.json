@@ -41,6 +41,70 @@
         "app": "Sydney Approach",
         "dep": "Sydney Control"
     },
+    "controllers": {
+        "approach": {
+            "callsign": "SY_APP",
+            "radioName": "Sydney Approach",
+            "frequency": "124.400",
+            "source": "published"
+        },
+        "departure": {
+            "callsign": "SY_DEP",
+            "radioName": "Sydney Control",
+            "frequency": "123.000",
+            "source": "published"
+        },
+        "tower": [
+            {
+                "callsign": "SY_TWR",
+                "radioName": "Sydney Tower",
+                "frequency": "120.500",
+                "runways": ["16R", "34L", "07", "25"],
+                "source": "published"
+            },
+            {
+                "callsign": "SY_TWR_E",
+                "radioName": "Sydney Tower East",
+                "frequency": "124.700",
+                "runways": ["16L", "34R"],
+                "source": "published"
+            }
+        ],
+        "centre": [
+            {
+                "sectorId": "YMMM",
+                "callsign": "YMMM",
+                "radioName": "Melbourne Centre",
+                "frequency": "132.000",
+                "source": "simulated",
+                "rules": {
+                    "waypoints": ["KEVIN", "JAKLN", "MANFA", "TONTO", "BANTU", "RIVET"],
+                    "bearingRanges": [[90, 290]],
+                    "default": true
+                }
+            },
+            {
+                "sectorId": "YBBB",
+                "callsign": "YBBB",
+                "radioName": "Brisbane Centre",
+                "frequency": "133.150",
+                "source": "simulated",
+                "rules": {
+                    "waypoints": ["BOREE", "LANOL", "YAKKA", "OLSEM", "NOBAR", "AVMOV", "MARLN"],
+                    "bearingRanges": [[290, 90]]
+                }
+            }
+        ],
+        "handoffThresholds": {
+            "recommendedNm": 12,
+            "urgentNm": 6,
+            "mandatoryNm": 2
+        },
+        "departureContactAltitudeAgl": {
+            "minAgl": 500,
+            "targetAgl": 1500
+        }
+    },
     "airspace": [
         {
             "floor": 0,

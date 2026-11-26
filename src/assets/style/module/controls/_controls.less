@@ -228,3 +228,30 @@
     li { padding: 2px 0; }
     [hidden] { display: none; }
 }
+
+#frequency-panel {
+    display: none;
+    position: absolute;
+    top: @spacing-2x;
+    // sit just left of the strip bay so the two never overlap
+    right: ~"calc(" @strip-view-open-width ~" + " @spacing-2x ~")";
+    z-index: @log-z;
+    max-width: 160px;
+    max-height: 40vh;
+    overflow: hidden;
+    padding: 4px 6px;
+    border: 1px solid @blue-medium;
+    background: @dark-06;
+    color: @light-gray;
+    font-family: @base-font-family;
+    font-size: 11px;
+    line-height: 16px;
+    pointer-events: none;
+
+    ul { margin: 0; padding: 0; list-style: none; }
+    li {
+        white-space: nowrap;
+        // keep the title tooltip hoverable while the rest stays click-through
+        pointer-events: auto;
+    }
+}

@@ -1,8 +1,29 @@
 # openScope — Project Summary and Local Changes
 
-## Scope of this document
+## Stage 1 implementation log
 
-This file describes the openScope codebase in `/Users/lucius/Downloads/openscope` and enumerates everything that differs from the original upstream project at <https://github.com/openscope/openscope>.
+- 26 November 2026 — Started the Australian airspace importer. The existing parser discards regions containing arcs or circles. The DAT dialog and navigation cache already share the same import path. The baseline AVA run reported the two existing runway-angle failures.
+- 26 November 2026 — Integrated OpenAir endpoint arcs, bearing arcs, circles, direction flags, vertical references and special-use classifications with the import dialog and cache. Partial imports show rejection reasons. Fallback CTR and CTA now have separate vertical limits, and the CTA follows the configured sector footprint. The first ten focused importer and VFR tests passed.
+- 26 November 2026 — Implemented controller radio names, central Australian pronunciation helpers, simulation-loop handoff wiring, `en-AU` voice selection, the frequency panel, DAT radio-name inputs, and regression tests. Direct AVA now reports only the two pre-existing runway float-equality failures; the dev build succeeds.
+
+
+- 26 November 2026 — Added self-intersection checks and cached region bounding boxes. Point queries return overlapping controlled shelves and resolve AGL limits against terrain contours, with airport elevation as the fallback. The production build succeeded. All 18 focused importer, airspace model and VFR arrival tests passed. The full AVA run recorded 1,350 passes, the same two baseline runway failures, 17 skipped and 14 todo. Repository-wide lint reported 120 errors and 31 warnings. The new OpenAir parser passed its individual lint check.
+- After reconnecting, verified the working tree still contained the spatial index, predictive guidance, CLEARENTRY command and keyboard controls. Recovered the outstanding reporting-point and circuit edits, and connected Australian map-layer filters, hover inspection and predicted entry highlighting to the scope. Integration checks are running.
+
+
+## Progress as of 26 November 2026
+
+- **Committed on `develop` through `382fb0c87`.** VFR aircraft can accept direct-to instructions for known fixes. An accepted direct-to or heading instruction cancels the VFR orbit, and an altitude instruction updates its target altitude. The commit also expands regression coverage in `test/aircraft/Pilot/VfrArrival.spec.js`.
+- **Controller handoffs are wired into the simulation.** The working tree includes airport controller configuration, tower and centre logic, aircraft handoff state, scoring event handlers, and per-frame controller updates. Tower logic includes a missed-transfer go-around. Airport switching resets simulated controller state.
+- **Controller radio names are spoken, not written.** `ControllerConfigModel` parses `radioName`, a central resolver supplies verified names for known Australian facilities, and `radioCall()` keeps compact callsigns in the radar log while speaking names such as “Sydney Approach” and “Melbourne Centre”. The frequency panel shows compact IDs, with the spoken name available as a tooltip.
+- **Australian phraseology is centralised.** `radioUtilities.js` provides helpers for frequencies, flight levels, squawks, speeds, approaches and procedures; `speech.js` selects an `en-AU` voice via `voice.lang` with English/default fallback.
+- **Player-facing checks remain open.** Verify the top-left frequency list, an IFR arrival transferred to tower, a missed transfer triggering a go-around, a VFR arrival remaining outside controlled airspace until authorised, and the spoken output for “Hobart Two Echo Foxtrot”, “Melbourne Two Echo Alpha” and “Walton Approach”.
+
+This checkpoint is based on source inspection and direct AVA runs. The test results in section 7 belong to the earlier audit.
+
+### Historical audit at `fcd2f1767`
+
+The table and sections 1–8 below describe the original comparison with <https://github.com/openscope/openscope> at that revision.
 
 | Item | Value |
 | --- | --- |

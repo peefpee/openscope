@@ -32,7 +32,12 @@ const GAME_EVENTS_POINT_VALUES = {
     LOCALIZER_INTERCEPT_ABOVE_GLIDESLOPE: -10,
     NOT_CLEARED_ON_ROUTE: -25,
     SEPARATION_LOSS: -200,
-    NO_TAKEOFF_SEPARATION: -200
+    NO_TAKEOFF_SEPARATION: -200,
+    TOWER_HANDOFF: 5,
+    CENTRE_HANDOFF: 5,
+    FREQ_CHANGE_APPROVED: 5,
+    MISSED_TOWER_HANDOFF: -100,
+    MISSED_CENTRE_HANDOFF: -50
 };
 
 /**
@@ -64,7 +69,12 @@ export const GAME_EVENTS = {
     LOCALIZER_INTERCEPT_ABOVE_GLIDESLOPE: 'LOCALIZER_INTERCEPT_ABOVE_GLIDESLOPE',
     NOT_CLEARED_ON_ROUTE: 'NOT_CLEARED_ON_ROUTE',
     SEPARATION_LOSS: 'SEPARATION_LOSS',
-    NO_TAKEOFF_SEPARATION: 'NO_TAKEOFF_SEPARATION'
+    NO_TAKEOFF_SEPARATION: 'NO_TAKEOFF_SEPARATION',
+    TOWER_HANDOFF: 'TOWER_HANDOFF',
+    CENTRE_HANDOFF: 'CENTRE_HANDOFF',
+    FREQ_CHANGE_APPROVED: 'FREQ_CHANGE_APPROVED',
+    MISSED_TOWER_HANDOFF: 'MISSED_TOWER_HANDOFF',
+    MISSED_CENTRE_HANDOFF: 'MISSED_CENTRE_HANDOFF'
 };
 
 /**
@@ -85,7 +95,12 @@ const GAME_EVENTS_DESCRIPTION = {
     LOCALIZER_INTERCEPT_ABOVE_GLIDESLOPE: 'Aircraft intercepted localizer above glidescope',
     NOT_CLEARED_ON_ROUTE: 'Aircraft left airspace without being on route',
     SEPARATION_LOSS: 'Aircraft violated separation requirements',
-    NO_TAKEOFF_SEPARATION: 'Aircraft violated same runway separation requirements'
+    NO_TAKEOFF_SEPARATION: 'Aircraft violated same runway separation requirements',
+    TOWER_HANDOFF: 'Aircraft handed off to tower',
+    CENTRE_HANDOFF: 'Aircraft handed off to centre',
+    FREQ_CHANGE_APPROVED: 'Frequency change approved for departure',
+    MISSED_TOWER_HANDOFF: 'Failed to transfer arrival to tower',
+    MISSED_CENTRE_HANDOFF: 'Departure left without centre handoff'
 };
 
 /**

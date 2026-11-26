@@ -1,3 +1,4 @@
+import { trajectory } from './Pilot/Trajectory';
 import _includes from 'lodash/includes';
 import _filter from 'lodash/filter';
 import AirportController from '../airport/AirportController';
@@ -11,6 +12,14 @@ import { vlen, vsub, vturn } from '../math/vector';
 import { degreesToRadians } from '../utilities/unitConverters';
 import { SEPARATION } from '../constants/aircraftConstants';
 import { EVENT } from '../constants/eventNames';
+
+function projectedPath(aircraft, airport, now, seconds) {
+    if (!aircraft.conflictProjection || now >= aircraft.conflictProjection.expires) {
+        aircraft.conflictProjection = { expires: now + 4,
+            samples: trajectory(aircraft, airport, seconds, aircraft.targetHeading, aircraft.target.altitude) };
+    }
+    return aircraft.conflictProjection.samples;
+}
 
 /**
  * Details about aircraft in close proximity in relation to 'the rules'
@@ -115,6 +124,11 @@ export default class AircraftConflict {
 
         this._recalculateLateralAndVerticalDistances();
         this.checkCollision();
+        const airport = AirportController.current;
+        if (airport && /^Y/i.test(airport.icao)) {
+            this.checkAustralianProximity(airport);
+            return;
+        }
 
         // Ignore aircraft below about 1000 feet
         const airportElevation = AirportController.airport_get().elevation;
@@ -169,6 +183,44 @@ export default class AircraftConflict {
     /**
      * Check for physical proximity and trigger crashes if necessary
      */
+    checkAustralianProximity(airport) {
+        const [a, b] = this.aircraft;
+        const now = TimeKeeper.accumulatedDeltaTime;
+        if (this.nextSeparationCheck > now) return;
+        this.nextSeparationCheck = now + 1;
+        const lookup = (ac) => airport.getAirspaceAtPosition(ac.relativePosition, ac.altitude);
+        const classes = new Set([...lookup(a), ...lookup(b)].map((area) => area.airspace_class));
+        const ifr = Number(a.rules !== 'vfr') + Number(b.rules !== 'vfr');
+        const mandatory = classes.has('A') || classes.has('B') || (classes.has('C') && ifr > 0) ||
+            ((classes.has('D') || classes.has('E')) && ifr === 2);
+        const runway = a.fms.arrivalRunwayModel;
+        const sameRunway = runway && runway === b.fms.arrivalRunwayModel;
+        const heavyPair = a.model.weightClass !== b.model.weightClass && [a,b].some((ac) => ac.model.weightClass === 'H');
+        const config = airport.data.separationOptions || {};
+        const miles = config.surveillance === false ? 5 : 3;
+        const lateral = (sameRunway && heavyPair ? Math.max(miles, 5) : mandatory ? miles : 1) * 1.852;
+        const vertical = mandatory ? 1000 : 500;
+        const airborne = !a.isOnGround() && !b.isOnGround();
+        const runwayConflict = sameRunway && (a.isOnGround() || b.isOnGround()) &&
+            this.distance < 1.852 && this.altitude < 300;
+        const loss = airborne && mandatory && this.distance < lateral && this.altitude < vertical;
+        this.conflicts.runway = Boolean(runwayConflict);
+        if (loss && !this.violations.proximityViolation && this.aircraft.some((ac) => ac.isPlayerControlled())) {
+            GameController.events_recordNew(GAME_EVENTS.SEPARATION_LOSS);
+        }
+        this.violations.proximityViolation = loss;
+        this.conflicts.proximityConflict = airborne && this.distance < lateral && this.altitude < vertical;
+        if (!airborne) { this.conflicts.predicted = false; return; }
+        const seconds = Math.min(180, Math.max(6, config.lookaheadSeconds || 60));
+        const first = projectedPath(a, airport, now, seconds);
+        const second = projectedPath(b, airport, now, seconds);
+        this.conflicts.predicted = first.some((p, i) => {
+            const q = second[i];
+            return q && Math.abs(p.altitude - q.altitude) < vertical &&
+                Math.hypot(p.position[0] - q.position[0], p.position[1] - q.position[1]) < lateral;
+        });
+    }
+
     checkProximity() {
         // No conflict or warning if vertical separation is present
         if (this.altitude >= SEPARATION.VERTICAL_FT) {
@@ -280,6 +332,8 @@ export default class AircraftConflict {
      * @return {Boolean}
      */
     isDuplicate() {
+        const [a, b] = this.aircraft;
+        if (a.conflicts) return Boolean(a.conflicts[b.callsign] && a.conflicts[b.callsign] !== this);
         return this._findInstancesOfThisConflictInAircraftController().length > 1;
     }
 
@@ -292,6 +346,8 @@ export default class AircraftConflict {
      * @return {Boolean}
      */
     isAlreadyKnown() {
+        const [a, b] = this.aircraft;
+        if (a.conflicts) return Boolean(a.conflicts[b.callsign]);
         return this._findInstancesOfThisConflictInAircraftController().length > 0;
     }
 

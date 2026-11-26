@@ -5,6 +5,7 @@ import {
     convertToThousands,
     convertStringToNumber
 } from '../../utilities/unitConverters';
+import { normalizeFrequency } from '../../constants/controllerConstants';
 
 /**
  * Enumeration of possible the hold command argument names.
@@ -256,3 +257,15 @@ export const crossingParser = (args = []) => {
 
     return [fix, altitude, speed];
 };
+
+/**
+ * Normalize `contact` command arguments to `[controllerType, normalizedFrequency]`
+ *
+ * @function contactParser
+ * @param args {array<string>}
+ * @return {array<string>}
+ */
+export const contactParser = (args = []) => [
+    String(args[0] || '').trim().toLowerCase(),
+    normalizeFrequency(args[1])
+];

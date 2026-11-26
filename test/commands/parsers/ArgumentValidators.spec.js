@@ -15,7 +15,8 @@ import {
     isValidCourseString,
     squawkValidator,
     optionalAltitudeValidator,
-    crossingValidator
+    crossingValidator,
+    contactValidator
 } from '../../../src/assets/scripts/client/commands/parsers/argumentValidators';
 
 // TODO: import ERROR_MESSAGE and use actual values to test against
@@ -404,4 +405,23 @@ ava('.crossingValidator() returns an error when speed is not a number', t => {
 
     result = crossingValidator(['LEMDY', 'a70', {}]);
     t.true(result === 'Invalid argument. Speed must be a number');
+});
+
+ava('.contactValidator() returns undefined for valid controller type and VHF COM frequency', t => {
+    t.is(contactValidator(['twr', '120.5']), undefined);
+    t.is(contactValidator(['TWR', '120.50']), undefined);
+    t.is(contactValidator(['ctr', '132.000']), undefined);
+    t.is(contactValidator(['CTR', '133.15']), undefined);
+});
+
+ava('.contactValidator() returns an error for invalid arg length, type, controller, or frequency', t => {
+    t.is(contactValidator([]), 'Invalid argument length. Expected exactly two arguments');
+    t.is(contactValidator(['twr']), 'Invalid argument length. Expected exactly two arguments');
+    t.is(contactValidator(['twr', '120.5', 'extra']), 'Invalid argument length. Expected exactly two arguments');
+    t.is(contactValidator([123, '120.5']), 'Invalid argument. Must be a string');
+    t.is(contactValidator(['twr', 120.5]), 'Invalid argument. Must be a string');
+    t.is(contactValidator(['app', '124.4']), "Invalid argument. Expected 'twr' or 'ctr' as the controller type");
+    t.is(contactValidator(['twr', '117.975']), 'Invalid argument. Expected a valid VHF COM frequency between 118.000 and 136.975');
+    t.is(contactValidator(['ctr', '137.000']), 'Invalid argument. Expected a valid VHF COM frequency between 118.000 and 136.975');
+    t.is(contactValidator(['twr', '120.5abc']), 'Invalid argument. Expected a valid VHF COM frequency between 118.000 and 136.975');
 });

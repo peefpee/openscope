@@ -6,6 +6,8 @@ import _forEach from 'lodash/forEach';
 import _get from 'lodash/get';
 import _map from 'lodash/map';
 import AirportController from './AirportController';
+import { firstEntry, trajectory } from '../aircraft/Pilot/Trajectory';
+import AirspaceIndex, { controlled, authorised } from './AirspaceIndex';
 import { australianShelves } from './dat/australianAirspace';
 import navData from './dat/NavDataCache';
 import AirspaceModel from './AirspaceModel';
@@ -24,6 +26,7 @@ import {
     round
 } from '../math/core';
 import {
+    point_in_poly,
     vectorize2dFromRadians,
     vlen,
     vsub,
@@ -38,6 +41,10 @@ import { ENVIRONMENT } from '../constants/environmentConstants';
 import { EVENT } from '../constants/eventNames';
 import { STORAGE_KEY } from '../constants/storageKeys';
 import { distance2d } from '../math/distance';
+import { isAustralianAirport } from '../constants/controllerConstants';
+import ControllerConfigModel from '../controller/ControllerConfigModel';
+import TowerController from '../controller/TowerController';
+import CentreController from '../controller/CentreController';
 
 const DEFAULT_CTR_RADIUS_KM = 80;
 const DEFAULT_CTR_CEILING_FT = 10000;
@@ -198,6 +205,30 @@ export default class AirportModel {
          * @default {}
          */
         this.terrain = {};
+
+        /**
+         * Controller configuration for this airport
+         *
+         * @property controllerConfig
+         * @type {ControllerConfigModel}
+         */
+        this.controllerConfig = new ControllerConfigModel();
+
+        /**
+         * Simulated Tower controller (Australian airports only)
+         *
+         * @property towerController
+         * @type {TowerController|null}
+         */
+        this.towerController = null;
+
+        /**
+         * Simulated Centre controller (Australian airports only)
+         *
+         * @property centreController
+         * @type {CentreController|null}
+         */
+        this.centreController = null;
 
         /**
          * @property timeout
@@ -382,7 +413,7 @@ export default class AirportModel {
         this._initRangeRings(data.rangeRings);
         this.loadTerrain();
         this.buildAirspace(data.airspace);
-        if (/^Y/i.test(this.icao)) {
+        if (isAustralianAirport(this.icao)) {
             this._australianData = data;
             this._controlledShelves = null;
             navData.load();
@@ -391,8 +422,29 @@ export default class AirportModel {
         this.buildRestrictedAreas(data.restricted);
         this.updateCurrentWind(data.wind);
 
+        if (this._onWindChange) {
+            this.releaseWindListener();
+        }
+
         this._onWindChange = this.updateCurrentWind.bind(this);
         this.eventBus.on(EVENT.WIND_CHANGE, this._onWindChange);
+
+        // Initialize controller configuration from airport data (with Australian simulated fallback)
+        this.controllerConfig = new ControllerConfigModel(data.controllers || null, {
+            icao: this.icao,
+            radio: this.radio,
+            runways: data.runways,
+            controllerRadioNames: data.controllerRadioNames
+        });
+
+        // Initialize simulated AI controllers for Australian airports
+        if (isAustralianAirport(this.icao)) {
+            this.towerController = new TowerController(this);
+            this.centreController = new CentreController(this);
+        } else {
+            this.towerController = null;
+            this.centreController = null;
+        }
     }
 
     releaseWindListener() {
@@ -806,6 +858,7 @@ export default class AirportModel {
                 apt.terrain[ele].push(terrainAtElevation);
             });
         });
+        this._terrainLevels = Object.keys(this.terrain).map(Number).sort((a, b) => b - a);
     }
 
     /**
@@ -924,17 +977,57 @@ export default class AirportModel {
      * @param altitude {number}
      * @return {boolean}
      */
-    get controlledShelves() {
+    get airspaceRegions() {
         if (!this._australianData) return this.airspace || [];
         const record = navData.records.get('au-airspace');
         if (!this._controlledShelves || record !== this._airspaceRecord) {
-            this._controlledShelves = australianShelves(this, this._australianData);
+            this._regions = australianShelves(this, this._australianData);
+            this._controlledShelves = this._regions.filter(controlled);
+            this._airspaceIndex = new AirspaceIndex(this._regions);
             this._airspaceRecord = record;
         }
-        return this._controlledShelves;
+        return this._regions;
+    }
+
+    get controlledShelves() {
+        const regions = this.airspaceRegions;
+        return this._australianData ? this._controlledShelves : regions;
+    }
+
+    get airspaceIndex() {
+        const regions = this.airspaceRegions;
+        if (!this._airspaceIndex || this._airspaceIndex.regions !== regions) this._airspaceIndex = new AirspaceIndex(regions);
+        return this._airspaceIndex;
+    }
+
+    getAirspaceAlongRoute(route, altitudeProfile) { return this.airspaceIndex.along(route, altitudeProfile); }
+
+    getNearestAirspaceBoundary(point, altitude) { return this.airspaceIndex.nearest(point, altitude); }
+
+    isAirspaceEntryAuthorised(aircraft, region) {
+        return authorised(aircraft, region, this);
+    }
+
+    getPredictedAirspaceEntry(aircraft, seconds = 90) {
+        return firstEntry(this, aircraft, trajectory(aircraft, this, seconds, aircraft.targetHeading, aircraft.target.altitude));
+    }
+
+    terrainElevationAt(point) {
+        // Terrain files contain elevation contours. Use the highest enclosing contour,
+        // respecting holes. Airport elevation approximates terrain outside mapped contours.
+        for (const level of this._terrainLevels || []) {
+            if (this.terrain[level].some(([outer, ...holes]) => point_in_poly(point, outer) &&
+                !holes.some((hole) => point_in_poly(point, hole)))) return level;
+        }
+        return this.positionModel.elevation;
+    }
+
+    getAirspaceAtPosition(point, altitude) {
+        return this.airspaceIndex.at(point, altitude);
     }
 
     isPointWithinAirspace(point, altitude) {
+        if (this._australianData) return this.getAirspaceAtPosition(point, altitude).some(controlled);
         const shelves = this.controlledShelves;
         for (let i = 0; i < shelves.length; i++) {
             const airspace = shelves[i];

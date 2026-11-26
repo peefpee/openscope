@@ -1,5 +1,6 @@
 /* eslint-disable camelcase, no-mixed-operators, object-shorthand, expected-return */
 import $ from 'jquery';
+import { ScopeControls } from './ui/ScopeControls';
 import _has from 'lodash/has';
 import _includes from 'lodash/includes';
 import AirportController from './airport/AirportController';
@@ -76,6 +77,10 @@ export default class InputController {
         this.$commandInput = this.$element.find(SELECTORS.DOM_SELECTORS.COMMAND);
         this.$canvases = this.$element.find(SELECTORS.DOM_SELECTORS.CANVASES);
 
+        this.$canvases.attr('tabindex', '0').attr('aria-label', 'Radar scope');
+        this.scopeControls = new ScopeControls(this.$canvases[0], this.$commandInput[0],
+            () => this.input.callsign && this._aircraftController.findAircraftByCallsign(this.input.callsign),
+            () => AirportController.current);
         return this.setupHandlers().enable();
     }
 
@@ -102,6 +107,9 @@ export default class InputController {
      * @method enable
      */
     enable() {
+        this.$window.on('blur', this.scopeControls.stop);
+        $(document).on('visibilitychange focusin', this.scopeControls.stop);
+        this._eventBus.on(EVENT.AIRPORT_CHANGE, this.scopeControls.stop);
         this.$window.on('keydown', this.onKeydownHandler);
         this.$window.on('keyup', this.onKeyupHandler);
         // TODO: these are non-standard events and will be deprecated soon. this should be moved
@@ -128,6 +136,10 @@ export default class InputController {
      * @method disable
      */
     disable() {
+        this.scopeControls.stop();
+        this.$window.off('blur', this.scopeControls.stop);
+        $(document).off('visibilitychange focusin', this.scopeControls.stop);
+        this._eventBus.off(EVENT.AIRPORT_CHANGE, this.scopeControls.stop);
         this.$window.off('keydown', this.onKeydownHandler);
         this.$window.off('keyup', this.onKeyupHandler);
         // uncomment only after `.on()` for this event has been implemented.
@@ -368,7 +380,9 @@ export default class InputController {
 
                 break;
             case MOUSE_EVENT_CODE.MIDDLE_PRESS:
-                CanvasStageModel.zoomReset();
+                if (GameController.getGameOption(GAME_OPTION_NAMES.MOUSE_CLICK_DRAG) === MOUSE_BUTTON_NAMES.MIDDLE) {
+                    this._markMousePressed(event, MOUSE_BUTTON_NAMES.MIDDLE);
+                } else CanvasStageModel.zoomReset();
 
                 break;
             case MOUSE_EVENT_CODE.RIGHT_PRESS:
@@ -461,6 +475,10 @@ export default class InputController {
             return;
         }
 
+        if (this.scopeControls && this.scopeControls.down(event.originalEvent)) {
+            event.preventDefault();
+            return;
+        }
         const currentCommandInputValue = this.$commandInput.val();
 
 
@@ -639,6 +657,7 @@ export default class InputController {
      * @private
      */
     _onKeyup(event) {
+        if (this.scopeControls) this.scopeControls.up(event.originalEvent);
         let { code } = event.originalEvent;
 
         if (code == null) {
@@ -1090,6 +1109,7 @@ export default class InputController {
 
         if (distanceFromPosition > CanvasStageModel.translatePixelsToKilometers(50)) {
             this.deselectAircraft();
+            this.$canvases[0].focus();
             this._markMousePressed(event, MOUSE_BUTTON_NAMES.LEFT);
         } else if (this.commandBarContext === COMMAND_CONTEXT.SCOPE) {
             this.$commandInput.val(`${this.$commandInput.val()} ${aircraftModel.callsign}`);

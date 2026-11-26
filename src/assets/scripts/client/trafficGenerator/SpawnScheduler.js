@@ -1,3 +1,4 @@
+import AirportController from '../airport/AirportController';
 import _forEach from 'lodash/forEach';
 import SpawnPatternCollection from './SpawnPatternCollection';
 import TimeKeeper from '../engine/TimeKeeper';
@@ -62,7 +63,7 @@ class SpawnScheduler {
             this._aircraftController.createVfrArrival(arrival);
         };
         spawn();
-        this.vfrTimer = GameController.game_interval(spawn, 300);
+        this.vfrTimer = GameController.game_interval(spawn, Math.max(10, (AirportController.current.data.vfrOptions || {}).intervalSeconds || 300));
     }
 
     startScheduler() {

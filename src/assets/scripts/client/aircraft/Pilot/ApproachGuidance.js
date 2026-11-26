@@ -50,6 +50,7 @@ export class ApproachGuidance {
         const position = aircraft.positionModel;
         while (!this.onFinal) {
             const point = this.points[this.index];
+            if (point.phase) aircraft.circuitPhase = aircraft.octaRequired ? 'AWAITING ENTRY' : point.phase;
             const distance = position.distanceToPosition(point.position);
             const next = this.points[this.index + 1];
             const capture = next ? Math.min(0.8, point.position.distanceToPosition(next.position) / 2) : 0.8;

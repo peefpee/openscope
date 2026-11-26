@@ -159,3 +159,21 @@ ava('._isSystemCommand() returns identical outcome for alias of a system command
         timewarpModel._isSystemCommand(TIMEWARP_50_MOCK.split(COMMAND_ARGS_SEPARATOR)[0])
     );
 });
+
+ava('parses case-insensitive contact, fca, freqchangeapproved, and chained commands', t => {
+    const contactTwr = new CommandParser('QFA412 contact twr 120.5').parse();
+    t.is(contactTwr.command, PARSED_COMMAND_NAME.TRANSMIT);
+    t.deepEqual(contactTwr.args, [['contact', 'twr', '120.500']]);
+
+    const contactCtr = new CommandParser('QFA412 CONTACT CTR 132.00').parse();
+    t.deepEqual(contactCtr.args, [['contact', 'ctr', '132.000']]);
+
+    const fcaShort = new CommandParser('ABC fca').parse();
+    t.deepEqual(fcaShort.args, [['freqChangeApproved']]);
+
+    const fcaLong = new CommandParser('ABC FREQCHANGEAPPROVED').parse();
+    t.deepEqual(fcaLong.args, [['freqChangeApproved']]);
+
+    const chained = new CommandParser('QFA412 contact twr 120.5 h 180').parse();
+    t.deepEqual(chained.args, [['contact', 'twr', '120.500'], ['heading', null, 180, false]]);
+});

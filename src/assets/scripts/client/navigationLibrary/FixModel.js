@@ -109,14 +109,23 @@ export default class FixModel extends BaseModel {
                 `received ${typeof fixName}, ${typeof fixData}, ${typeof referencePosition}`);
         }
 
-        const [lat, lon, spoken] = fixData;
+        const [lat, lon, spokenFromArray] = Array.isArray(fixData) ? fixData : [];
+        const spokenFromObject = !Array.isArray(fixData) && typeof fixData.spoken === 'string' ?
+            fixData.spoken :
+            null;
+
         this.name = fixName.toUpperCase();
         this._positionModel = new StaticPositionModel([lat, lon], referencePosition, referencePosition.magneticNorth);
 
-        if (typeof spoken === 'undefined') {
-            this._spoken = fixName.toLowerCase();
+        // Prefer an explicit spoken name from the data; otherwise derive it from
+        // the fix name. Coded Australian waypoints are handled centrally by
+        // NavigationLibrary.getFixSpokenName().
+        if (spokenFromObject) {
+            this._spoken = spokenFromObject;
+        } else if (typeof spokenFromArray === 'string') {
+            this._spoken = spokenFromArray.toLowerCase();
         } else {
-            this._spoken = spoken.toLowerCase();
+            this._spoken = fixName.toLowerCase();
         }
 
         return this;

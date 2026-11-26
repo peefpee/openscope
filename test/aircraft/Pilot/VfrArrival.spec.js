@@ -36,7 +36,16 @@ test('Australian fallback shelves and VFR entries use airport-relative distance 
         const [surface, shelf] = airport.controlledShelves;
         t.is(surface.floor, 500);
         t.is(shelf.floor, 2500);
-        t.is(surface.ceiling, airport.ctr_ceiling);
+        t.is(surface.ceiling, 2500);
+        t.is(shelf.ceiling, airport.ctr_ceiling);
+        t.is(surface.source, 'simulated');
+        t.deepEqual(shelf.relativePoly, airport.airspace[0].relativePoly);
+        t.true(surface.isPointInside([0, 0], 1000));
+        t.true(shelf.isPointInside([0, 0], 3000));
+        airport.terrain = { 1000: [[[[-1, -1], [1, -1], [1, 1], [-1, 1]]]] };
+        airport._terrainLevels = [1000];
+        t.deepEqual(airport.getAirspaceAtPosition([0, 0], 2800), [surface]);
+        t.deepEqual(airport.getAirspaceAtPosition([0, 0], 3100), [shelf]);
         const entry = vfrEntry(airport);
         t.truthy(entry);
         t.false(airport.controlledShelves.some((s) => s.isPointInside(entry.position.relativePosition, entry.orbit.altitude)));

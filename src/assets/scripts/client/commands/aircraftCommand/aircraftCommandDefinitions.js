@@ -20,7 +20,8 @@ import {
     holdValidator,
     squawkValidator,
     optionalAltitudeValidator,
-    crossingValidator
+    crossingValidator,
+    contactValidator
 } from '../parsers/argumentValidators';
 import {
     altitudeParser,
@@ -29,7 +30,8 @@ import {
     timewarpParser,
     optionalAltitudeParser,
     crossingParser,
-    ilsParser
+    ilsParser,
+    contactParser
 } from '../parsers/argumentParsers';
 
 /**
@@ -99,6 +101,10 @@ const ZERO_ARG_AIRCRAFT_COMMANDS = {
         parse: noop
     },
     flyPresentHeading: {
+        validate: zeroArgumentsValidator,
+        parse: noop
+    },
+    freqChangeApproved: {
         validate: zeroArgumentsValidator,
         parse: noop
     },
@@ -231,6 +237,7 @@ const CUSTOM_ARG_AIRCRAFT_COMMANDS = {
         validate: altitudeValidator,
         parse: altitudeParser
     },
+    clearentry: { validate: zeroArgumentsValidator, parse: noop },
     octa: { validate: zeroArgumentsValidator, parse: noop },
     dw: {
         validate: (args) => (args.length === 1 || (args.length === 2 && /^[lr]$/.test(args[1])) ?
@@ -275,6 +282,10 @@ const CUSTOM_ARG_AIRCRAFT_COMMANDS = {
     climbViaSid: {
         validate: optionalAltitudeValidator,
         parse: optionalAltitudeParser
+    },
+    contact: {
+        validate: contactValidator,
+        parse: contactParser
     }
 };
 

@@ -1,4 +1,5 @@
 /* eslint-disable max-len */
+/* global zlsa */
 import $ from 'jquery';
 import AircraftController from './aircraft/AircraftController';
 import AirlineController from './airline/AirlineController';
@@ -294,6 +295,10 @@ export default class AppController {
         this.scopeModel.radarTargetCollection.reset();
         SpawnPatternCollection.reset();
         GameController.destroyTimers();
+
+        const currentAirport = AirportController.current;
+        if (currentAirport && currentAirport.towerController) currentAirport.towerController.reset();
+        if (currentAirport && currentAirport.centreController) currentAirport.centreController.reset();
 
         NavigationLibrary.init(nextAirportJson);
         SpawnPatternCollection.init(nextAirportJson);

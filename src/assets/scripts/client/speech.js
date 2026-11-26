@@ -3,7 +3,7 @@ import $ from 'jquery';
 import _get from 'lodash/get';
 import _has from 'lodash/has';
 import EventTracker from './EventTracker';
-import { radio_heading, radio_altitude } from './utilities/radioUtilities';
+import { radio_heading, radio_altitude, radio_spokenText } from './utilities/radioUtilities';
 import { STORAGE_KEY } from './constants/storageKeys';
 import { SELECTORS } from './constants/selectors';
 import {
@@ -47,12 +47,48 @@ export const randomizePilotVoice = () => {
 };
 
 /**
+ * Select a browser voice. A named pilot voice is honoured when installed;
+ * otherwise an Australian English voice is preferred, with graceful fallback
+ * to any English voice and then the browser default.
+ *
+ * @function _selectVoice
+ * @param {Object} pilotVoice
+ * @param {Array} voices
+ * @return {Object|null}
+ * @private
+ */
+export const _selectVoice = (pilotVoice, voices) => {
+    if (!Array.isArray(voices) || voices.length === 0) {
+        return null;
+    }
+
+    const requestedName = pilotVoice && pilotVoice.voice;
+    let voice = typeof requestedName === 'string' ?
+        voices.find((candidate) => candidate.name === requestedName || candidate.lang === requestedName) :
+        null;
+
+    if (!voice) {
+        voice = voices.find((candidate) => /^en[-_]?au$/i.test(candidate.lang || ''));
+    }
+
+    if (!voice) {
+        voice = voices.find((candidate) => /^en\b/i.test(candidate.lang || ''));
+    }
+
+    if (!voice) {
+        voice = voices.find((candidate) => candidate.default === true);
+    }
+
+    return voice || voices[0];
+};
+
+/**
  *
  * @function speech_say
  * @param sentence
  */
 export const speech_say = (sentence, pilotVoice) => {
-    if (prop.speech.synthesis != null && prop.speech.enabled) {
+    if (prop.speech && prop.speech.synthesis != null && prop.speech.enabled) {
         let textToSay = '';
 
         for (let i = 0; i < sentence.length; i++) {
@@ -76,14 +112,14 @@ export const speech_say = (sentence, pilotVoice) => {
             }
         }
 
-        const utterance = new SpeechSynthesisUtterance(textToSay.replace(/\bRNAV\b/gi, 'ar nav')); // make the object
-        utterance.lang = 'en-US'; // set the language
-        utterance.voice = prop.speech.synthesis.getVoices().filter((voice) => {
-            // set the voice
-            return voice.name === pilotVoice.voice;
-        })[0];
-        utterance.rate = pilotVoice.rate;
-        utterance.pitch = pilotVoice.pitch;
+        const spokenText = radio_spokenText(textToSay);
+        const utterance = new SpeechSynthesisUtterance(spokenText);
+        const selectedVoice = _selectVoice(pilotVoice, prop.speech.synthesis.getVoices());
+
+        utterance.lang = (selectedVoice && selectedVoice.lang) || 'en-AU';
+        utterance.voice = selectedVoice;
+        utterance.rate = (pilotVoice && pilotVoice.rate) || 1.0;
+        utterance.pitch = (pilotVoice && pilotVoice.pitch) || 1.0;
 
         // say the words
         prop.speech.synthesis.speak(utterance);

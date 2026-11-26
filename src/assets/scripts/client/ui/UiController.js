@@ -159,6 +159,16 @@ class UiController {
         this.$log = null;
 
         /**
+         * Element listing adjacent controller frequencies
+         *
+         * @for UiController
+         * @property $frequencyPanel
+         * @type {Jquery|Element}
+         * @default null
+         */
+        this.$frequencyPanel = null;
+
+        /**
          * Duration for chat log transmissions to remain visible in seconds
          *
          * @for UiController
@@ -364,6 +374,7 @@ class UiController {
         this.$fastForwards = this.$element.find(SELECTORS.DOM_SELECTORS.FAST_FORWARDS);
         this.$githubLinkElement = this.$element.find(SELECTORS.DOM_SELECTORS.GITHUB_EXTERNAL_LINK);
         this.$log = this.$element.find(SELECTORS.DOM_SELECTORS.LOG);
+        this.$frequencyPanel = this.$element.find('#frequency-panel');
         this.$pausedImg = this.$element.find(`${SELECTORS.DOM_SELECTORS.PAUSED} img`);
         this.$switchAirport = this.$element.find(SELECTORS.DOM_SELECTORS.SWITCH_AIRPORT);
         this.$toggleAirportGuide = this.$element.find(SELECTORS.DOM_SELECTORS.TOGGLE_AIRPORT_GUIDE);
@@ -383,8 +394,10 @@ class UiController {
         this.$tutorialDialog = this.$element.find(SELECTORS.DOM_SELECTORS.TUTORIAL);
         this.chatLogDuration = GameController.game.option.getOptionByName('chatLogDuration');
 
-        return this.setupHandlers()
-            .enable();
+        this.setupHandlers().enable();
+        this._updateFrequencyPanel();
+
+        return this;
     }
 
     /**
@@ -532,6 +545,7 @@ class UiController {
         this.$fastForwards = null;
         this.$githubLinkElement = null;
         this.$log = null;
+        this.$frequencyPanel = null;
         this.chatLogDuration = null;
         this.$pausedImg = null;
         this.$switchAirport = null;
@@ -602,6 +616,50 @@ class UiController {
     onAirportChange() {
         this.$log.empty();
         this.msaView.refresh();
+        this._updateFrequencyPanel();
+    }
+
+    /**
+     * Render adjacent controller callsigns and frequencies in the overlay panel
+     *
+     * @for UiController
+     * @method _updateFrequencyPanel
+     * @private
+     */
+    _updateFrequencyPanel() {
+        const { controllerConfig } = AirportController.current;
+        const $list = $('<ul></ul>');
+
+        this.$frequencyPanel.empty();
+
+        // the panel stays hidden until the airport config can supply frequencies
+        if (typeof controllerConfig.getAdjacentFrequencyList !== 'function') {
+            this.$frequencyPanel.hide();
+
+            return;
+        }
+
+        const adjacentFrequencies = controllerConfig.getAdjacentFrequencyList();
+
+        adjacentFrequencies.forEach(({ callsign, frequency, radioName }) => {
+            const $row = $('<li class="frequency-panel-row"></li>');
+
+            $row.text(`${callsign} ${frequency}`);
+
+            if (radioName) {
+                $row.prop('title', radioName);
+            }
+
+            $list.append($row);
+        });
+
+        if (adjacentFrequencies.length === 0) {
+            this.$frequencyPanel.hide();
+
+            return;
+        }
+
+        this.$frequencyPanel.append($list).show();
     }
 
     /**

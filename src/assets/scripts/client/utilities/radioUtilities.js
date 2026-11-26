@@ -474,3 +474,186 @@ export const getRadioCardinalDirectionNameForHeading = (heading) => {
 
     return radio_cardinalDir_names[cardinalDirection];
 };
+
+/**
+ * Speak a string of digits one at a time using the radiotelephony names.
+ *
+ * @param {string|number} value
+ * @return {string}
+ */
+const _spokenDigits = (value) => value.toString().split('').map((digit) => radio_names[digit]).join(' ');
+
+/**
+ * Speak a frequency, preserving the digits actually printed after the decimal point.
+ *
+ * @param {string|number} freq
+ * @return {string}
+ */
+export const radio_frequencySpoken = (freq) => {
+    if (freq === null || typeof freq === 'undefined') {
+        return '';
+    }
+
+    const parts = freq.toString().trim().split('.');
+    const whole = _spokenDigits(parts[0]);
+
+    if (parts.length === 1 || parts[1] === '') {
+        return whole;
+    }
+
+    return `${whole} decimal ${_spokenDigits(parts[1])}`;
+};
+
+/**
+ * Speak a flight level supplied as FL230, 230 or the equivalent altitude 23000.
+ *
+ * @param {string|number} level
+ * @return {string}
+ */
+export const radio_flightLevelSpoken = (level) => {
+    if (level === null || typeof level === 'undefined') {
+        return '';
+    }
+
+    const digits = level.toString().trim().replace(/^FL/i, '');
+    const levelDigits = digits.length === 5 ?
+        Math.round(Number(digits) / 100).toString() :
+        digits;
+
+    return `flight level ${_spokenDigits(levelDigits)}`;
+};
+
+/**
+ * Speak a four-digit transponder code one digit at a time.
+ *
+ * @param {string|number} code
+ * @return {string}
+ */
+export const radio_squawkSpoken = (code) => {
+    if (code === null || typeof code === 'undefined') {
+        return '';
+    }
+
+    const digits = code.toString().trim();
+    const codeDigits = digits.length < 4 ?
+        digits_integer(Number(digits), 4) :
+        digits;
+
+    return _spokenDigits(codeDigits);
+};
+
+/**
+ * Speak an indicated airspeed one digit at a time.
+ *
+ * @param {string|number} speed
+ * @return {string}
+ */
+export const radio_speedSpoken = (speed) => {
+    if (speed === null || typeof speed === 'undefined') {
+        return '';
+    }
+
+    return _spokenDigits(speed.toString().trim());
+};
+
+/**
+ * Speak an approach name, eg ILS34L, RNAV12 or VIS 34. Words that have already
+ * been spoken are left as-is.
+ *
+ * @param {string} name
+ * @return {string}
+ */
+export const radio_approachSpoken = (name) => {
+    if (name === null || typeof name === 'undefined') {
+        return '';
+    }
+
+    const input = name.toString().trim();
+
+    if (input === '') {
+        return '';
+    }
+
+    const upper = input.toUpperCase().replace(/\s+/g, ' ');
+    const PREFIX_NAMES = {
+        ILS: 'ILS',
+        RNAV: 'ar nav',
+        VIS: 'visual',
+        VISUAL: 'visual'
+    };
+    const prefixMatch = upper.match(/^(ILS|RNAV|VISUAL|VIS)(?=\d|\s|$)\s*/);
+
+    if (prefixMatch) {
+        const designator = upper.slice(prefixMatch[0].length).replace(/\s+/g, '').match(/^(\d+)([LRC])?$/);
+
+        if (designator) {
+            const side = designator[2] ? ` ${radio_runway_names[designator[2].toLowerCase()]}` : '';
+
+            return `${PREFIX_NAMES[prefixMatch[1]]} ${_spokenDigits(designator[1])}${side}`;
+        }
+    }
+
+    const spokenWords = input.split(/\s+/).map((word) => {
+        if (/^[a-z]+$/.test(word)) {
+            return word;
+        }
+
+        return word.toUpperCase()
+            .replace(/(\d+)([LRC])$/, (match, digits, suffix) => {
+                return ` ${_spokenDigits(digits)} ${radio_runway_names[suffix.toLowerCase()]}`;
+            })
+            .replace(/\d/g, (digit) => ` ${radio_names[digit]}`);
+    });
+
+    return spokenWords.join(' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+};
+
+/**
+ * Speak a procedure name, eg KEVIN7 -> kevin seven. Words that have already
+ * been spoken are left as-is.
+ *
+ * @param {string} id
+ * @return {string}
+ */
+export const radio_procedureSpoken = (id) => {
+    if (id === null || typeof id === 'undefined') {
+        return '';
+    }
+
+    const input = id.toString().trim();
+    const match = input.match(/^([A-Za-z]+)(\d+)$/);
+
+    if (match) {
+        return `${match[1].toUpperCase()} ${_spokenDigits(match[2]).toUpperCase()}`;
+    }
+
+    return input.replace(/\d/g, (digit) => ` ${radio_names[digit]}`)
+        .replace(/\s+/g, ' ')
+        .trim();
+};
+
+/**
+ * Post-process a complete spoken string, replacing only the numeric patterns
+ * that have a defined radiotelephony form. Other words, including callsigns
+ * and already-spoken phrases, are left untouched.
+ *
+ * @param {string} text
+ * @return {string}
+ */
+export const radio_spokenText = (text) => {
+    if (text === null || typeof text === 'undefined') {
+        return '';
+    }
+
+    return text.toString()
+        .replace(/\bflight level (\d{2,3})\b/gi, (match, level) => radio_flightLevelSpoken(level))
+        .replace(/\bFL(\d{2,3})\b/g, (match, level) => radio_flightLevelSpoken(level))
+        .replace(/\b(\d{3}\.\d{1,3})\b/g, (match, freq) => radio_frequencySpoken(freq))
+        .replace(/\b(\d{4,5})\s*(?:ft|feet)\b/gi, (match, altitude) => radio_altitude(altitude))
+        .replace(/\b(\d{2}[LRC])\b/gi, (match, runway) => radio_runway(runway))
+        .replace(/\b(squawk\s+)(\d{4})\b/gi, (match, lead, code) => `${lead}${radio_squawkSpoken(code)}`)
+        .replace(/\b(heading\s+)(\d{3})\b/gi, (match, lead, heading) => `${lead}${radio_heading(heading)}`)
+        .replace(/\bRNAV\b/g, 'ar nav');
+};

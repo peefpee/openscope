@@ -191,6 +191,10 @@ export const GAME_OPTION_VALUES = [
                 value: 'left'
             },
             {
+                displayLabel: 'Middle Click',
+                value: 'middle'
+            },
+            {
                 displayLabel: 'Right Click',
                 value: 'right'
             }

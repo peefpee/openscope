@@ -1,4 +1,3 @@
-import { radio_spellOut } from '../utilities/radioUtilities';
 import _filter from 'lodash/filter';
 import _flatten from 'lodash/flatten';
 import _forEach from 'lodash/forEach';
@@ -7,11 +6,13 @@ import _isEmpty from 'lodash/isEmpty';
 import _map from 'lodash/map';
 import _without from 'lodash/without';
 import _uniq from 'lodash/uniq';
+import { radio_spellOut } from '../utilities/radioUtilities';
 import AirwayModel from './AirwayModel';
 import FixCollection from './FixCollection';
 import HoldCollection from './HoldCollection';
 import ProcedureModel from './ProcedureModel';
 import StaticPositionModel from '../base/StaticPositionModel';
+import { AUSTRALIAN_AIRPORT_SPOKEN_NAMES } from '../constants/controllerConstants';
 import { PROCEDURE_TYPE } from '../constants/routeConstants';
 import { degreesToRadians } from '../utilities/unitConverters';
 import { INVALID_INDEX } from '../constants/globalConstants';
@@ -160,6 +161,7 @@ class NavigationLibrary {
         this._procedureFixes = new Set(names.filter(Boolean).map((fix) => fix.toUpperCase()));
         this._approachFixes = new Set((groups.approach || []).map((name) => name.toUpperCase()));
         this._airportIcao = (airportJson.icao || '').toUpperCase();
+        this._airportName = airportJson.name || '';
         this._spokenAirportName = airportJson.spokenAirportName || (!airportJson.isDatImport && airportJson.name);
         this._initializeSidLines();
         this._initializeStarLines();
@@ -529,11 +531,29 @@ class NavigationLibrary {
      */
     getFixSpokenName(fixName, approachEntry = false) {
         const id = fixName.toUpperCase();
+
         if (/^[A-Z]$/.test(id)) return radio_spellOut(id);
-        if (this._airportIcao.startsWith('Y') && (approachEntry || this._approachFixes.has(id)) && /^[A-Z]{2}\d[A-Z0-9]{2}$/.test(id)) {
-            const airport = this._spokenAirportName || radio_spellOut(id.slice(0, 2));
+
+        // Australian coded waypoints encode the airport prefix in positions 1-2
+        // and a phonetic suffix in positions 3-5 (eg HB2EF, ML2EA, SY3WF).
+        const isAustralian = /^Y/i.test(this._airportIcao || '');
+        const isCodedWaypoint = /^[A-Z]{2}\d[A-Z0-9]{2}$/.test(id);
+
+        if (isAustralian && isCodedWaypoint) {
+            const airport = this._spokenAirportName ||
+                AUSTRALIAN_AIRPORT_SPOKEN_NAMES[this._airportIcao] ||
+                String(this._airportName || '').split(/[\s/]/)[0] ||
+                radio_spellOut(id.slice(0, 2));
+
             return `${airport} ${radio_spellOut(id.slice(2))}`;
         }
+
+        // `approachEntry` is retained for callers that already know a fix is
+        // part of an approach. Coded waypoints above do not need it.
+        if (approachEntry && this._approachFixes.has(id)) {
+            return FixCollection.getFixSpokenName(fixName);
+        }
+
         return FixCollection.getFixSpokenName(fixName);
     }
 

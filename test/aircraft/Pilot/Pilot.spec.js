@@ -134,7 +134,7 @@ ava('.applyArrivalProcedure() returns a success message after success', (t) => {
     t.true(_isArray(result));
     t.true(result[0]);
     t.true(result[1].log === 'cleared to McCarran International Airport via the KEPEC3 arrival');
-    t.true(result[1].say === 'cleared to McCarran International Airport via the KEPEC THREE arrival');
+    t.true(result[1].say === 'cleared to McCarran International Airport via the Kepec Three arrival');
 });
 
 ava('.applyArrivalProcedure() calls #_fms.replaceArrivalProcedure() with the correct parameters', (t) => {
@@ -186,7 +186,7 @@ ava('.applyDepartureProcedure() returns a success message after success', (t) =>
     t.true(_isArray(result));
     t.true(result[0]);
     t.true(result[1].log === 'cleared to destination via the COWBY6 departure, then as filed');
-    t.true(result[1].say === 'cleared to destination via the COWBOY SIX departure, then as filed');
+    t.true(result[1].say === 'cleared to destination via the Cowboy Six departure, then as filed');
 });
 
 ava('.replaceFlightPlanWithNewRoute() returns an error when passed an invalid route', (t) => {

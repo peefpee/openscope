@@ -744,3 +744,14 @@ IATA is another international aviation organization (like ICAO) which maintains 
 Flight levels are described by a number, which is this nominal altitude (or, pressure altitude) in hecto-feet, while being a multiple of 500 ft, therefore always ending on 0 or 5. Therefore, a pressure altitude of, for example, 32,000 feet is referred to as "flight level 320".
 
 Flight levels are usually designated in writing as FLxxx, where xxx is a two or three-digit number indicating the pressure altitude in units of 100 feet. In radio communications, FL290 would be pronounced as "flight level two nine(r) zero." The phrase "flight level" makes it clear that this refers to the standardized pressure altitude.
+
+
+### Australian OpenAir imports
+
+The DAT import dialog accepts OpenAir polygons (DP), endpoint arcs (DB), radius and bearing arcs (DA), and circles (DC). Set the centre with `V X=` and use `V D=-` for anticlockwise arcs. The default direction at the start of each region is clockwise. The import summary reports rejected regions and curve approximations. Successful parsing alone does not establish regional coverage.
+
+Altitude records retain their original reference. For AGL limits, the simulator uses the highest enclosing terrain contour, or airport elevation where contour data is unavailable. Scope labels prefixed or suffixed with `SIM` identify generated airspace. The simulated Class C CTR extends 10 NM from the airport and up to 2,000 ft AGL. The overlying Class C shelf follows the sector footprint up to the approach ceiling.
+
+### Controller radio names
+
+Each entry in the `controllers` block accepts an optional `radioName`. `callsign` remains the compact identifier shown in logs and on the frequency panel; `radioName` is the phrase spoken by the simulated pilot. For example, `SY_APP` has the radio name `Sydney Approach` and `YMMM` has the radio name `Melbourne Centre`. Known Australian facilities are resolved centrally when `radioName` is omitted. DAT imports can set these names from the import dialog.

@@ -1,4 +1,5 @@
 /* eslint-disable no-continue */
+/* global prop */
 import _find from 'lodash/find';
 import _get from 'lodash/get';
 import _isNil from 'lodash/isNil';
@@ -370,6 +371,17 @@ export default class AircraftController {
 
             aircraftModel.update();
             aircraftModel.updateWarning();
+            const airport = AirportController.current;
+
+            if (airport && airport.controllerConfig) {
+                if (airport.towerController) {
+                    airport.towerController.updateArrivalHandoff(aircraftModel);
+
+                    if (airport.towerController.shouldDepartureContactPlayer(aircraftModel)) {
+                        airport.towerController.transferDepartureToPlayer(aircraftModel);
+                    }
+                }
+            }
 
             // TODO: conflict checking eats up a lot of resources when there are more than
             //       30 aircraft, exit early if we're still taxiing
@@ -568,14 +580,30 @@ export default class AircraftController {
      */
     createVfrArrival(pattern) {
         const airport = AirportController.current;
-        if (!airport || !/^Y/i.test(airport.icao) || !pattern || this.aircraft.list.filter((a) => a.rules === 'vfr').length >= 4) return;
-        const entry = vfrEntry(airport);
-        if (!entry) return;
+        if (!airport || !/^Y/i.test(airport.icao) || !pattern) {
+            return;
+        }
+
+        const vfrCount = this.aircraft.list.filter((a) => a.rules === 'vfr').length;
+        const maxVfr = _get(airport.data, ['vfrOptions', 'maxAircraft'], 4);
+
+        if (vfrCount >= maxVfr) {
+            return;
+        }
         const props = this._buildAircraftProps(pattern, false, 'vh/lightGA');
-        this._createAircraftWithInitializationProps({ ...props, rules: 'vfr', orbit: entry.orbit,
-            positionModel: entry.position, altitude: entry.orbit.altitude, speed: props.model.speed.cruise,
+        const entry = vfrEntry(airport, props.model.speed.cruise);
+        if (!entry) return;
+        this._createAircraftWithInitializationProps({
+            ...props,
+            rules: 'vfr',
+            orbit: entry.orbit,
+            positionModel: entry.position,
+            altitude: entry.orbit.altitude,
+            speed: props.model.speed.cruise,
             heading: entry.orbit.reportingPoint ? entry.position.bearingToPosition(entry.orbit.reportingPoint.position) :
-                entry.orbit.center.bearingToPosition(entry.position) + Math.PI / 2, report: entry.report });
+                entry.orbit.center.bearingToPosition(entry.position) + Math.PI / 2,
+            report: entry.report
+        });
     }
 
     _createAircraftWithInitializationProps(initializationProps) {
@@ -595,7 +623,11 @@ export default class AircraftController {
         this._eventBus.trigger(EVENT.ADD_AIRCRAFT, aircraftModel);
 
         if (aircraftModel.rules === 'vfr') {
-            aircraftModel.radioCall(`VFR arrival, ${initializationProps.report}, ${Math.round(aircraftModel.altitude)} feet, remaining OCTA`, 'app');
+            aircraftModel.radioCall(
+                `VFR arrival, ${initializationProps.report}, ` +
+                `${Math.round(aircraftModel.altitude)} feet, remaining OCTA`,
+                'app'
+            );
             return;
         }
         if (isArrival) {

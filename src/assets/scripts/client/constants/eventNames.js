@@ -25,6 +25,7 @@ export const EVENT = {
      * @type {string}
      */
     AIRPORT_CHANGE: 'airport-change',
+    AIRSPACE_LAYERS_CHANGE: 'airspace-layers-change',
 
     /**
      * @memberof EVENT
@@ -32,6 +33,15 @@ export const EVENT = {
      * @type {string}
      */
     CHAT_LOG_DURATION_CHANGE: 'chat-log-duration-change',
+
+    /**
+     * Triggered when airport controller configuration or user frequency overrides change
+     *
+     * @memberof EVENT
+     * @property CONTROLLER_CONFIG_CHANGED
+     * @type {string}
+     */
+    CONTROLLER_CONFIG_CHANGED: 'controller-config-changed',
 
     /**
      * A click was registered outside of a specific `StripViewModel`
@@ -373,5 +383,68 @@ export const AIRCRAFT_EVENT = {
      * @property AIRSPACE_EXIT
      * @type {string}
      */
-    AIRSPACE_EXIT: 'airspace-exit'
+    AIRSPACE_EXIT: 'airspace-exit',
+
+    /**
+     * Triggered when an arrival is successfully handed off to tower.
+     *
+     * @memberof AIRCRAFT_EVENT
+     * @property TOWER_HANDOFF
+     * @type {string}
+     */
+    TOWER_HANDOFF: 'tower-handoff',
+
+    /**
+     * Triggered when a departure is successfully handed off to centre.
+     *
+     * @memberof AIRCRAFT_EVENT
+     * @property CENTRE_HANDOFF
+     * @type {string}
+     */
+    CENTRE_HANDOFF: 'centre-handoff',
+
+    /**
+     * Triggered when player issues a frequency change approved.
+     *
+     * @memberof AIRCRAFT_EVENT
+     * @property FREQ_CHANGE_APPROVED
+     * @type {string}
+     */
+    FREQ_CHANGE_APPROVED: 'freq-change-approved',
+
+    /**
+     * Triggered when an arrival is not transferred to tower before the mandatory deadline.
+     *
+     * @memberof AIRCRAFT_EVENT
+     * @property MISSED_TOWER_HANDOFF
+     * @type {string}
+     */
+    MISSED_TOWER_HANDOFF: 'missed-tower-handoff',
+
+    /**
+     * Triggered when a departure exits airspace without being handed off to centre.
+     *
+     * @memberof AIRCRAFT_EVENT
+     * @property MISSED_CENTRE_HANDOFF
+     * @type {string}
+     */
+    MISSED_CENTRE_HANDOFF: 'missed-centre-handoff',
+
+    /**
+     * Triggered when a VFR aircraft enters controlled airspace without clearance.
+     *
+     * @memberof AIRCRAFT_EVENT
+     * @property VFR_AIRSPACE_INFRINGEMENT
+     * @type {string}
+     */
+    VFR_AIRSPACE_INFRINGEMENT: 'vfr-airspace-infringement',
+
+    /**
+     * Triggered when an invalid frequency change approval release is attempted.
+     *
+     * @memberof AIRCRAFT_EVENT
+     * @property INVALID_FCA_RELEASE
+     * @type {string}
+     */
+    INVALID_FCA_RELEASE: 'invalid-fca-release'
 };

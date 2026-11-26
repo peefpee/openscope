@@ -9,7 +9,8 @@ import {
     headingValidator,
     holdValidator,
     squawkValidator,
-    optionalAltitudeValidator
+    optionalAltitudeValidator,
+    contactValidator
 } from '../../../src/assets/scripts/client/commands/parsers/argumentValidators';
 import {
     altitudeParser,
@@ -17,7 +18,8 @@ import {
     crossingParser,
     headingParser,
     holdParser,
-    optionalAltitudeParser
+    optionalAltitudeParser,
+    contactParser
 } from '../../../src/assets/scripts/client/commands/parsers/argumentParsers';
 import { AIRCRAFT_COMMAND_MAP } from '../../../src/assets/scripts/client/commands/aircraftCommand/aircraftCommandMap';
 
@@ -282,7 +284,26 @@ ava('Australian VFR commands have the expected aliases', t => {
     for (const name of ['octa', 'dw', 'xw', 'base', 'final']) self_alias(t, AIRCRAFT_COMMAND_MAP, name);
 });
 
-ava('make sure we test all 41 aircraft commands', t => {
+ava('contact command validates controller type + frequency and parses normalized args', t => {
+    const contact = new AircraftCommandModel('contact')._commandDefinition;
+    const p = contactParser;
+    const v = contactValidator;
+    t.true(contact.parse.toString() === p.toString() && contact.validate.toString() === v.toString());
+    self_alias(t, AIRCRAFT_COMMAND_MAP, 'contact');
+    t.is(contact.validate(['twr', '120.5']), undefined);
+    t.deepEqual(contact.parse(['TWR', '120.5']), ['twr', '120.500']);
+    t.truthy(contact.validate(['app', '120.5']));
+    t.truthy(contact.validate(['twr', '117.5']));
+});
+
+ava('freqChangeApproved command uses zero-arg validator and has fca/freqchangeapproved aliases', t => {
+    const fca = new AircraftCommandModel('freqChangeApproved')._commandDefinition;
+    test_aliases(t, AIRCRAFT_COMMAND_MAP, 'freqChangeApproved', ['fca', 'freqchangeapproved']);
+    t.is(fca.validate.toString(), zeroArgVal());
+    t.is(fca.parse.toString(), noopParse());
+});
+
+ava('make sure we test all 44 aircraft commands', t => {
     t.true(Object.values(AIRCRAFT_COMMAND_MAP)
-        .filter(val => !val.isSystemCommand).length === 41);
+        .filter(val => !val.isSystemCommand).length === 44);
 });

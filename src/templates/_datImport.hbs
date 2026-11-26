@@ -16,7 +16,7 @@
     <input id="dat-msa-file" type="file" accept=".dat">
     <small class="dat-msa-source"></small>
     <label for="dat-airspace-file">Australian controlled airspace <small>Optional · airspaces/airspace.txt</small></label>
-    <input id="dat-airspace-file" type="file" accept=".txt"><small class="dat-airspace-source"></small>
+    <input id="dat-airspace-file" type="file" accept=".txt"><div class="dat-airspace-source"></div>
     <p class="dat-cache-status" role="status"></p>
     <p class="dat-status" role="status" aria-live="polite"></p>
     <div class="dat-results nice-scrollbar"></div>
@@ -24,6 +24,16 @@
         <div class="dat-spoken-name" hidden>
             <label for="dat-spoken-name">Airport name for radio calls</label>
             <input id="dat-spoken-name" type="text" maxlength="80" placeholder="e.g. Hobart">
+        </div>
+        <div class="dat-controller-names" hidden>
+            <label for="dat-approach-radio-name">Approach radio name</label>
+            <input id="dat-approach-radio-name" type="text" maxlength="80" placeholder="e.g. Melbourne Approach">
+            <label for="dat-departure-radio-name">Departure radio name</label>
+            <input id="dat-departure-radio-name" type="text" maxlength="80" placeholder="e.g. Melbourne Control">
+            <label for="dat-tower-radio-name">Tower radio name</label>
+            <input id="dat-tower-radio-name" type="text" maxlength="80" placeholder="e.g. Sydney Tower">
+            <label for="dat-centre-radio-name">Centre radio name</label>
+            <input id="dat-centre-radio-name" type="text" maxlength="80" placeholder="e.g. Brisbane Centre">
         </div>
         <p>Opening this scope starts a new session with simulated arrivals and departures in a 40 NM practice sector. Use the SID and STAR radar controls to display flyable procedures.</p>
         <button type="button" class="dat-open">Open imported scope</button>

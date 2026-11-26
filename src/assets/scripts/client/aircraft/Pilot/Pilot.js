@@ -15,8 +15,11 @@ import { radians_normalize } from '../../math/circle';
 import {
     groupNumbers,
     radio_altitude,
+    radio_approachSpoken,
     radio_heading,
+    radio_procedureSpoken,
     radio_runway,
+    radio_speedSpoken,
     radio_spellOut,
     radio_trend,
     getRadioCardinalDirectionNameForHeading
@@ -259,7 +262,7 @@ export default class Pilot {
         if (!aircraftModel.model.isAbleToMaintainSpeed(speed)) {
             const readback = {};
             readback.log = `unable to maintain ${speed} knots due to performance`;
-            readback.say = `unable to maintain ${radio_spellOut(speed)} knots due to performance`;
+            readback.say = `unable to maintain ${radio_speedSpoken(speed)} knots due to performance`;
 
             return [false, readback];
         }
@@ -273,7 +276,7 @@ export default class Pilot {
         // Build the readback
         const readback = {};
         readback.log = `${instruction} ${speed}`;
-        readback.say = `${instruction} ${radio_spellOut(speed)}`;
+        readback.say = `${instruction} ${radio_speedSpoken(speed)}`;
 
         return [true, readback];
     }
@@ -300,7 +303,8 @@ export default class Pilot {
         // Build readback
         const readback = {};
         readback.log = `cleared to ${airportName} via the ${this._fms._routeModel.getStarIcao().toUpperCase()} arrival`;
-        readback.say = `cleared to ${airportName} via the ${this._fms._routeModel.getStarName().toUpperCase()} arrival`;
+        readback.say = `cleared to ${airportName} via the ` +
+            `${radio_procedureSpoken(this._fms._routeModel.getStarName())} arrival`;
 
         return [true, readback];
     }
@@ -328,7 +332,7 @@ export default class Pilot {
         const sidName = this._fms.getSidName();
         const readback = {};
         readback.log = `cleared to destination via the ${sidIcao.toUpperCase()} departure, then as filed`;
-        readback.say = `cleared to destination via the ${sidName.toUpperCase()} departure, then as filed`;
+        readback.say = `cleared to destination via the ${radio_procedureSpoken(sidName)} departure, then as filed`;
 
         return [true, readback];
     }
@@ -445,9 +449,11 @@ export default class Pilot {
             holdWaypointModel = this._fms.findWaypoint(fixName);
 
             if (!holdWaypointModel || !holdWaypointModel.isHoldWaypoint) {
+                const spokenFix = NavigationLibrary.getFixSpokenName(fixName);
+
                 return [false, {
                     log: `that must be for somebody else, we weren't given holding over ${fixName.toUpperCase()}`,
-                    say: `that must be for somebody else, we weren't given holding over ${NavigationLibrary.getFixSpokenName(fixName)}`
+                    say: `that must be for somebody else, we weren't given holding over ${spokenFix}`
                 }];
             }
         }
@@ -675,7 +681,8 @@ export default class Pilot {
 
         const readback = {
             log: `cross ${fixName.toUpperCase()} at ${altitude} and ${speed}kt`,
-            say: `cross ${NavigationLibrary.getFixSpokenName(fixName)} at ${radio_altitude(altitude)} and ${radio_spellOut(speed)} knots`
+            say: `cross ${NavigationLibrary.getFixSpokenName(fixName)} at ` +
+                `${radio_altitude(altitude)} and ${radio_spellOut(speed)} knots`
         };
 
         return [true, readback];
@@ -771,14 +778,20 @@ export default class Pilot {
         const airport = AirportController.airport_get();
         const runway = airport.getRunway(runwayName.toUpperCase().replace(/^(\d)([LCR]?)$/, '0$1$2'));
         if (leg && (!runway || aircraft.isOnGround())) return [false, 'unable to join that circuit'];
-        const right = side ? side === 'r' : aircraft.rightCircuit || false;
-        const legName = { dw: 'downwind', xw: 'crosswind', base: 'base', final: 'final' }[leg];
+        const right = side ? side === 'r' : Boolean(runway && runway.circuit ? runway.circuit.direction === 'right' : aircraft.rightCircuit);
+        const legName = {
+            dw: 'downwind', xw: 'crosswind', base: 'base', final: 'final'
+        }[leg];
         const [success, guidance] = leg ? [true, new ApproachGuidance(runway,
-            circuitPoints(runway, leg, right, aircraft.model.speed.landing * 1.35), legName)] :
+            circuitPoints(runway, leg, right, aircraft.model.speed.landing * 1.35, aircraft, airport), legName)] :
             planApproach(aircraft, airport, runway, entry);
         if (!success) {
-            const say = entry ? guidance.replace(/(via |waypoint )([A-Z0-9_]+)/g, (match, prefix, fix) =>
-                prefix + NavigationLibrary.getFixSpokenName(fix, true)) : guidance;
+            const spokenGuidance = entry ?
+                guidance.replace(/(via |waypoint )([A-Z0-9_]+)/g, (match, prefix, fix) => {
+                    return prefix + NavigationLibrary.getFixSpokenName(fix, true);
+                }) :
+                guidance;
+            const say = spokenGuidance;
             return [false, { log: guidance, say }];
         }
 
@@ -789,13 +802,24 @@ export default class Pilot {
         this.hasApproachClearance = true;
         this.approachGuidance = guidance;
         aircraft.vfrOrbit = null;
-        if (leg) aircraft.rightCircuit = right;
+        if (leg) {
+            aircraft.rightCircuit = right;
+            aircraft.circuitClearance = { runway: runway.name, leg, right, issuer: aircraft.controllerState.currentController };
+            aircraft.circuitPhase = aircraft.octaRequired ? 'AWAITING ENTRY' : 'JOINING ' + legName.toUpperCase();
+        }
         aircraft.target.turn = null;
         aircraft.setFlightPhase(FLIGHT_PHASE.DESCENT);
-        if (leg) return [true, `joining ${leg === 'final' ? '' : right ? 'right ' : 'left '}${legName} runway ${runway.name}`];
+        if (leg) {
+            let turn = '';
+
+            if (leg !== 'final') {
+                turn = right ? 'right ' : 'left ';
+            }
+
+            return [true, `joining ${turn}${legName} runway ${runway.name}`];
+        }
         const spokenVia = entry ? ` via ${NavigationLibrary.getFixSpokenName(entry, true)}` : '';
-        const spokenName = guidance.name.replace(/^RNAV R\d{2}[LCR]?(?:-([A-Z]))?$/, (id, variant) =>
-            variant ? `RNAV ${radio_spellOut(variant)}` : 'RNAV');
+        const spokenName = radio_approachSpoken(guidance.name);
         const via = entry ? ` via ${entry}` : '';
         return [true, {
             log: `cleared ${guidance.name} approach runway ${runway.name}${via}`,
@@ -894,7 +918,8 @@ export default class Pilot {
         // force lower-case in verbal readback to get speech synthesis to pronounce the fix instead of spelling it
         return [true, {
             log: `hold ${cardinalDirectionFromFix} of ${fixName.toUpperCase()} ${radialReadbackLog}, ${holdParametersReadback}`,
-            say: `hold ${cardinalDirectionFromFix} of ${NavigationLibrary.getFixSpokenName(fixName)} ${radialReadbackSay}, ${holdParametersReadback}`
+            say: `hold ${cardinalDirectionFromFix} of ${NavigationLibrary.getFixSpokenName(fixName)} ` +
+                `${radialReadbackSay}, ${holdParametersReadback}`
         }];
     }
 
@@ -980,7 +1005,8 @@ export default class Pilot {
         if (!this._fms.hasWaypointName(waypointName)) {
             const readback = {
                 log: `cannot proceed direct to ${waypointName}, it does not exist in our flight plan`,
-                say: `cannot proceed direct to ${NavigationLibrary.getFixSpokenName(waypointName)}, it does not exist in our flight plan`
+                say: `cannot proceed direct to ${NavigationLibrary.getFixSpokenName(waypointName)}, ` +
+                    'it does not exist in our flight plan'
             };
             return [false, readback];
         }
@@ -1073,7 +1099,8 @@ export default class Pilot {
                 const bearing = Math.round(radiansToDegrees(this.positionModel.bearingToPosition(waypointPosition)));
 
                 readback.log = `our on-course heading to ${waypoint.getDisplayName()} is ${bearing}`;
-                readback.say = `our on-course heading to ${NavigationLibrary.getFixSpokenName(waypoint.getDisplayName())} is ${radio_heading(bearing)}`;
+                readback.say = 'our on-course heading to ' +
+                    `${NavigationLibrary.getFixSpokenName(waypoint.getDisplayName())} is ${radio_heading(bearing)}`;
 
                 return [true, readback];
             }

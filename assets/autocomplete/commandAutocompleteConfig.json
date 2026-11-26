@@ -823,6 +823,173 @@
           "validate": "^([0-7]{4})$"
         }
       ]
+    },
+    {
+      "id": "contact",
+      "variants": [
+        {
+          "aliases": [
+            "contact"
+          ],
+          "altkeys": [
+            "handoff",
+            "frequency",
+            "transfer"
+          ],
+          "explain": "transfer to <u>controller</u> on <u>frequency</u>"
+        }
+      ],
+      "paramsets": [
+        {
+          "example": "twr 120.5",
+          "explain": "contact Tower on <u>frequency</u>",
+          "candidate": [
+            "^$",
+            "^t(?:w(?:r)?)?$",
+            "^twr +(?:1(?:[1-3]|(?:1[89]|2[0-9]|3[0-5])(?:\\.[0-9]{0,3})?|36(?:\\.(?:[0-8][0-9]{0,2}|9(?:[0-6][0-9]?|7[0-5]?)?)?)?)?)?$"
+          ],
+          "validate": "^(twr) +(1(?:1[89]|2[0-9]|3[0-5])(?:\\.[0-9]{1,3})?|136(?:\\.(?:[0-8][0-9]{0,2}|9(?:[0-6][0-9]?|7[0-5]?)?))?)$"
+        },
+        {
+          "example": "ctr 132.0",
+          "explain": "contact Centre on <u>frequency</u>",
+          "candidate": [
+            "^$",
+            "^c(?:t(?:r)?)?$",
+            "^ctr +(?:1(?:[1-3]|(?:1[89]|2[0-9]|3[0-5])(?:\\.[0-9]{0,3})?|36(?:\\.(?:[0-8][0-9]{0,2}|9(?:[0-6][0-9]?|7[0-5]?)?)?)?)?)?$"
+          ],
+          "validate": "^(ctr) +(1(?:1[89]|2[0-9]|3[0-5])(?:\\.[0-9]{1,3})?|136(?:\\.(?:[0-8][0-9]{0,2}|9(?:[0-6][0-9]?|7[0-5]?)?))?)$"
+        }
+      ]
+    },
+    {
+      "id": "freqchangeapproved",
+      "variants": [
+        {
+          "aliases": [
+            "fca",
+            "freqchangeapproved"
+          ],
+          "altkeys": [
+            "frequency change approved",
+            "release"
+          ],
+          "explain": "<b>f</b>requency <b>c</b>hange <b>a</b>pproved"
+        }
+      ],
+      "paramsets": []
+    },
+    {
+      "id": "octa",
+      "variants": [
+        {
+          "aliases": [
+            "octa"
+          ],
+          "altkeys": [
+            "outside controlled airspace"
+          ],
+          "explain": "remain <b>o</b>utside <b>c</b>on<b>t</b>rolled <b>a</b>irspace"
+        }
+      ],
+      "paramsets": []
+    },
+    {
+      "id": "dw",
+      "variants": [
+        {
+          "aliases": [
+            "dw"
+          ],
+          "altkeys": [
+            "downwind"
+          ],
+          "explain": "join <b>d</b>own<b>w</b>ind for <u>runway</u>"
+        }
+      ],
+      "paramsets": [
+        {
+          "example": "16R",
+          "explain": "join downwind for <u>runway</u>",
+          "candidate": "^(?:[1-9]|0[1-9]|[1-2][0-9]|3[0-6])[LCRlcr]?$",
+          "validate": "^((?:[1-9]|0[1-9]|[1-2][0-9]|3[0-6])[LCRlcr]?)$"
+        },
+        {
+          "example": "16R r",
+          "explain": "join left or right downwind for <u>runway</u>",
+          "candidate": [
+            "^(?:[1-9]|0[1-9]|[1-2][0-9]|3[0-6])[LCRlcr]?$",
+            "^(?:[1-9]|0[1-9]|[1-2][0-9]|3[0-6])[LCRlcr]? +[lrLR]?$"
+          ],
+          "validate": "^((?:[1-9]|0[1-9]|[1-2][0-9]|3[0-6])[LCRlcr]?) +([lrLR])$"
+        }
+      ]
+    },
+    {
+      "id": "xw",
+      "variants": [
+        {
+          "aliases": [
+            "xw"
+          ],
+          "altkeys": [
+            "crosswind"
+          ],
+          "explain": "join <b>c</b>ross<b>w</b>ind for <u>runway</u>"
+        }
+      ],
+      "paramsets": [
+        {
+          "example": "16R",
+          "explain": "join crosswind for <u>runway</u>",
+          "candidate": "^(?:[1-9]|0[1-9]|[1-2][0-9]|3[0-6])[LCRlcr]?$",
+          "validate": "^((?:[1-9]|0[1-9]|[1-2][0-9]|3[0-6])[LCRlcr]?)$"
+        }
+      ]
+    },
+    {
+      "id": "base",
+      "variants": [
+        {
+          "aliases": [
+            "base"
+          ],
+          "altkeys": [
+            "base leg"
+          ],
+          "explain": "join <b>base</b> leg for <u>runway</u>"
+        }
+      ],
+      "paramsets": [
+        {
+          "example": "16R",
+          "explain": "join base leg for <u>runway</u>",
+          "candidate": "^(?:[1-9]|0[1-9]|[1-2][0-9]|3[0-6])[LCRlcr]?$",
+          "validate": "^((?:[1-9]|0[1-9]|[1-2][0-9]|3[0-6])[LCRlcr]?)$"
+        }
+      ]
+    },
+    {
+      "id": "final",
+      "variants": [
+        {
+          "aliases": [
+            "final"
+          ],
+          "altkeys": [
+            "final approach"
+          ],
+          "explain": "join <b>final</b> for <u>runway</u>"
+        }
+      ],
+      "paramsets": [
+        {
+          "example": "16R",
+          "explain": "join final for <u>runway</u>",
+          "candidate": "^(?:[1-9]|0[1-9]|[1-2][0-9]|3[0-6])[LCRlcr]?$",
+          "validate": "^((?:[1-9]|0[1-9]|[1-2][0-9]|3[0-6])[LCRlcr]?)$"
+        }
+      ]
     }
   ],
   "system": [

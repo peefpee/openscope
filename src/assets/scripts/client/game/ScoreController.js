@@ -39,6 +39,11 @@ export default class ScoreController {
         this._onApproachHandler = this._onApproach.bind(this);
         this._onLandingHandler = this._onLanding.bind(this);
         this._onExitAirspaceHandler = this._onExitAirspace.bind(this);
+        this._onTowerHandoffHandler = this._onTowerHandoff.bind(this);
+        this._onCentreHandoffHandler = this._onCentreHandoff.bind(this);
+        this._onFrequencyChangeApprovedHandler = this._onFrequencyChangeApproved.bind(this);
+        this._onMissedTowerHandoffHandler = this._onMissedTowerHandoff.bind(this);
+        this._onMissedCentreHandoffHandler = this._onMissedCentreHandoff.bind(this);
 
         return this;
     }
@@ -52,6 +57,11 @@ export default class ScoreController {
         EventBus.on(AIRCRAFT_EVENT.APPROACH, this._onApproachHandler);
         EventBus.on(AIRCRAFT_EVENT.FULLSTOP, this._onLandingHandler);
         EventBus.on(AIRCRAFT_EVENT.AIRSPACE_EXIT, this._onExitAirspaceHandler);
+        EventBus.on(AIRCRAFT_EVENT.TOWER_HANDOFF, this._onTowerHandoffHandler);
+        EventBus.on(AIRCRAFT_EVENT.CENTRE_HANDOFF, this._onCentreHandoffHandler);
+        EventBus.on(AIRCRAFT_EVENT.FREQ_CHANGE_APPROVED, this._onFrequencyChangeApprovedHandler);
+        EventBus.on(AIRCRAFT_EVENT.MISSED_TOWER_HANDOFF, this._onMissedTowerHandoffHandler);
+        EventBus.on(AIRCRAFT_EVENT.MISSED_CENTRE_HANDOFF, this._onMissedCentreHandoffHandler);
 
         return this;
     }
@@ -65,6 +75,11 @@ export default class ScoreController {
         EventBus.off(AIRCRAFT_EVENT.APPROACH, this._onApproachHandler);
         EventBus.off(AIRCRAFT_EVENT.FULLSTOP, this._onLandingHandler);
         EventBus.off(AIRCRAFT_EVENT.AIRSPACE_EXIT, this._onExitAirspaceHandler);
+        EventBus.off(AIRCRAFT_EVENT.TOWER_HANDOFF, this._onTowerHandoffHandler);
+        EventBus.off(AIRCRAFT_EVENT.CENTRE_HANDOFF, this._onCentreHandoffHandler);
+        EventBus.off(AIRCRAFT_EVENT.FREQ_CHANGE_APPROVED, this._onFrequencyChangeApprovedHandler);
+        EventBus.off(AIRCRAFT_EVENT.MISSED_TOWER_HANDOFF, this._onMissedTowerHandoffHandler);
+        EventBus.off(AIRCRAFT_EVENT.MISSED_CENTRE_HANDOFF, this._onMissedCentreHandoffHandler);
 
         return this;
     }
@@ -150,6 +165,58 @@ export default class ScoreController {
     _onAirspaceExitWithoutClearance(aircraftModel) {
         aircraftModel.radioCall('leaving airspace without being on our route', AIRPORT_CONTROL_POSITION_NAME.DEPARTURE, true);
         GameController.events_recordNew(GAME_EVENTS.NOT_CLEARED_ON_ROUTE);
+    }
+
+    /**
+     * @for ScoreController
+     * @method _onTowerHandoff
+     * @param aircraftModel {AircraftModel}
+     * @private
+     */
+    _onTowerHandoff(aircraftModel) {
+        GameController.events_recordNew(GAME_EVENTS.TOWER_HANDOFF);
+    }
+
+    /**
+     * @for ScoreController
+     * @method _onCentreHandoff
+     * @param aircraftModel {AircraftModel}
+     * @private
+     */
+    _onCentreHandoff(aircraftModel) {
+        GameController.events_recordNew(GAME_EVENTS.CENTRE_HANDOFF);
+    }
+
+    /**
+     * @for ScoreController
+     * @method _onFrequencyChangeApproved
+     * @param aircraftModel {AircraftModel}
+     * @private
+     */
+    _onFrequencyChangeApproved(aircraftModel) {
+        GameController.events_recordNew(GAME_EVENTS.FREQ_CHANGE_APPROVED);
+    }
+
+    /**
+     * @for ScoreController
+     * @method _onMissedTowerHandoff
+     * @param aircraftModel {AircraftModel}
+     * @private
+     */
+    _onMissedTowerHandoff(aircraftModel) {
+        GameController.events_recordNew(GAME_EVENTS.MISSED_TOWER_HANDOFF);
+        UiController.ui_log(`${aircraftModel.readbackCallsign} missed tower handoff`, true);
+    }
+
+    /**
+     * @for ScoreController
+     * @method _onMissedCentreHandoff
+     * @param aircraftModel {AircraftModel}
+     * @private
+     */
+    _onMissedCentreHandoff(aircraftModel) {
+        GameController.events_recordNew(GAME_EVENTS.MISSED_CENTRE_HANDOFF);
+        UiController.ui_log(`${aircraftModel.readbackCallsign} missed centre handoff`, true);
     }
 
     /**

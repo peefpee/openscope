@@ -1,4 +1,3 @@
-import { orbitTrack } from './Pilot/VfrArrival';
 import _ceil from 'lodash/ceil';
 import _defaultTo from 'lodash/defaultTo';
 import _findIndex from 'lodash/findIndex';
@@ -9,7 +8,11 @@ import _isEmpty from 'lodash/isEmpty';
 import _isEqual from 'lodash/isEqual';
 import _isNil from 'lodash/isNil';
 import _uniqueId from 'lodash/uniqueId';
+/* global prop */
+import { orbitTrack } from './Pilot/VfrArrival';
+import { enforceOcta, turnRate } from './Pilot/Trajectory';
 import AirportController from '../airport/AirportController';
+import NavigationLibrary from '../navigationLibrary/NavigationLibrary';
 import Fms from './FlightManagementSystem/Fms';
 import GameController, { GAME_EVENTS } from '../game/GameController';
 import ModeController from './ModeControl/ModeController';
@@ -51,7 +54,8 @@ import {
     groupNumbers,
     radio_runway,
     radio_altitude,
-    radio_spellOut
+    radio_spellOut,
+    radio_spokenText
 } from '../utilities/radioUtilities';
 import {
     degreesToRadians,
@@ -74,6 +78,12 @@ import {
     AIRPORT_CONSTANTS,
     AIRPORT_CONTROL_POSITION_NAME
 } from '../constants/airportConstants';
+import {
+    CONTROLLER_TYPE,
+    HANDOFF_STATE,
+    PLAYER_CONTROLLED_TYPES,
+    isAustralianAirport
+} from '../constants/controllerConstants';
 import {
     INVALID_NUMBER,
     TIME
@@ -375,6 +385,11 @@ export default class AircraftModel {
          */
         this.rules = options.rules || FLIGHT_RULES.IFR;
         this.vfrOrbit = options.orbit || null;
+        this.octaRequired = Boolean(options.orbit);
+        this.entryClearance = null;
+        this.landingClearance = null;
+        this.circuitClearance = null;
+        this.infringements = [];
 
         /**
          * Flag for if an aircraft is within controlled airspace, thus
@@ -434,6 +449,50 @@ export default class AircraftModel {
          */
         this.isRemovable = false;
         this.transferredToCentre = false;
+
+        /**
+         * Controller ownership and handoff state for this aircraft.
+         * Used by Australian airports for the handoff system.
+         *
+         * @for AircraftModel
+         * @property controllerState
+         * @type {Object}
+         */
+        this.controllerState = {
+            /** Current controller type (TWR/APP/DEP/CTR/UNICOM/NONE) */
+            currentController: CONTROLLER_TYPE.NONE,
+            /** Current communication frequency */
+            currentFrequency: null,
+            /** Current handoff state */
+            handoffState: HANDOFF_STATE.NONE,
+            /** Target controller for pending handoff */
+            targetController: null,
+            /** Target frequency for pending handoff */
+            targetFrequency: null,
+            /** Recommended handoff frequency */
+            recommendedFrequency: null,
+            /** Recommended Centre sector identifier */
+            recommendedSector: null,
+            /** Whether a handoff is required */
+            handoffRequired: false,
+            /** Whether the handoff has been completed */
+            handoffCompleted: false,
+            /** Simulation time of handoff deadline */
+            handoffDeadline: null,
+            /** Unique identifier for the current handoff event */
+            handoffEventId: null,
+            /** Whether communication has been released */
+            communicationReleased: false,
+            /** Whether VFR airspace entry clearance has been granted */
+            airspaceEntryCleared: false,
+            /** Time of last radio reminder */
+            lastReminderTime: 0,
+            /** Time of last VFR boundary warning */
+            lastBoundaryWarningTime: 0,
+            /** Circuit intention stored before tower transfer (VFR) */
+            storedCircuitIntention: null
+        };
+        this._handoffEventSeq = 0;
 
         // Set to true when simulating future movements of the aircraft
         // Should be checked before updating global state such as score
@@ -678,8 +737,141 @@ export default class AircraftModel {
         this.targetHeading = this.heading;
         this.target.speed = this.speed;
 
-        // This assumes and arrival spawns outside the airspace
-        this.isControllable = data.category === FLIGHT_CATEGORY.DEPARTURE || this.rules === FLIGHT_RULES.VFR;
+        if (!this.isAustralianOperation()) {
+            // This assumes an arrival spawns outside the airspace
+            this.isControllable = data.category === FLIGHT_CATEGORY.DEPARTURE || this.rules === FLIGHT_RULES.VFR;
+            return;
+        }
+
+        const airport = AirportController.airport_get();
+        const config = airport && airport.controllerConfig;
+        const approachCfg = config && typeof config.getApproach === 'function' ? config.getApproach() : null;
+        const departureCfg = config && typeof config.getDeparture === 'function' ? config.getDeparture() : null;
+        const approachFrequency = approachCfg ? approachCfg.frequency : null;
+        const departureFrequency = departureCfg ? departureCfg.frequency : approachFrequency;
+
+        if (this.rules === FLIGHT_RULES.VFR) {
+            this.setControllerState({
+                currentController: CONTROLLER_TYPE.APP,
+                currentFrequency: approachFrequency,
+                handoffState: HANDOFF_STATE.NONE
+            });
+        } else if (data.category === FLIGHT_CATEGORY.DEPARTURE) {
+            this.setControllerState({
+                currentController: CONTROLLER_TYPE.DEP,
+                currentFrequency: departureFrequency,
+                handoffState: HANDOFF_STATE.NONE
+            });
+        } else {
+            this.setControllerState({
+                currentController: CONTROLLER_TYPE.NONE,
+                currentFrequency: null,
+                handoffState: HANDOFF_STATE.NONE
+            });
+        }
+
+        if (data.controllerState && typeof data.controllerState === 'object') {
+            this.setControllerState(data.controllerState);
+        }
+    }
+
+    /**
+     * Whether this aircraft is operating at an Australian (`Y*`) airport.
+     *
+     * @for AircraftModel
+     * @method isAustralianOperation
+     * @return {boolean}
+     */
+    isAustralianOperation() {
+        const airport = AirportController.airport_get();
+
+        if (airport && airport.icao) {
+            return isAustralianAirport(airport.icao);
+        }
+
+        return isAustralianAirport(this.origin) || isAustralianAirport(this.destination);
+    }
+
+    /**
+     * Whether the player currently owns ATC control of this aircraft.
+     *
+     * @for AircraftModel
+     * @method isPlayerControlled
+     * @return {boolean}
+     */
+    isPlayerControlled() {
+        if (!this.isAustralianOperation()) {
+            return this.isControllable;
+        }
+
+        const cs = this.controllerState;
+
+        if (!cs) {
+            return false;
+        }
+
+        return PLAYER_CONTROLLED_TYPES.has(cs.currentController) &&
+            !cs.communicationReleased &&
+            !this.transferredToCentre;
+    }
+
+    /**
+     * Synchronize legacy `isControllable` from `controllerState` on Australian operations.
+     *
+     * @for AircraftModel
+     * @method syncControllabilityFromControllerState
+     * @return {boolean}
+     */
+    syncControllabilityFromControllerState() {
+        if (!this.isAustralianOperation()) {
+            return this.isControllable;
+        }
+
+        this.isControllable = this.isPlayerControlled();
+
+        return this.isControllable;
+    }
+
+    /**
+     * Update `controllerState` fields and synchronize controllability.
+     * No-op on projected future-path clones.
+     *
+     * @for AircraftModel
+     * @method setControllerState
+     * @param {Object} [updates={}]
+     * @return {Object}
+     */
+    setControllerState(updates = {}) {
+        if (this.projected) {
+            return this.controllerState;
+        }
+
+        Object.assign(this.controllerState, updates);
+
+        if (this.isAustralianOperation()) {
+            this.syncControllabilityFromControllerState();
+        }
+
+        return this.controllerState;
+    }
+
+    /**
+     * Generate and store a unique handoff event identifier for scoring deduplication.
+     *
+     * @for AircraftModel
+     * @method generateHandoffEventId
+     * @param {string} [prefix='handoff']
+     * @return {string}
+     */
+    generateHandoffEventId(prefix = 'handoff') {
+        this._handoffEventSeq += 1;
+        const eventId = `${this.id}-${prefix}-${this._handoffEventSeq}`;
+
+        if (!this.projected) {
+            this.controllerState.handoffEventId = eventId;
+        }
+
+        return eventId;
     }
 
     /**
@@ -695,6 +887,14 @@ export default class AircraftModel {
      * @method getViewModel
      * @return {object<string, string>}
      */
+    _buildFlightPlanLabel(routeLabel, outbound) {
+        if (this.rules === FLIGHT_RULES.VFR) {
+            return this.vfrOrbit ? 'VFR · OCTA' : 'VFR · visual arrival';
+        }
+
+        return outbound ? `${routeLabel} · OUT ${outbound.name}` : routeLabel;
+    }
+
     getViewModel() {
         let assignedAltitude = '-';
         let flightPlanAltitude = '-';
@@ -721,7 +921,7 @@ export default class AircraftModel {
             flightPlanAltitude,
             arrivalAirportId: this.destination.toUpperCase(),
             departureAirportId: this.origin.toUpperCase(),
-            flightPlan: this.rules === FLIGHT_RULES.VFR ? (this.vfrOrbit ? 'VFR · OCTA' : 'VFR · visual arrival') : outbound ? `${routeLabel} · OUT ${outbound.name}` : routeLabel
+            flightPlan: this._buildFlightPlanLabel(routeLabel, outbound)
         };
     }
 
@@ -1181,43 +1381,74 @@ export default class AircraftModel {
     }
 
     /**
+     * Resolve the compact written identifier and spoken radio name for a
+     * controller sector. Written logs keep the short radar callsign while
+     * speech uses the configuration's `radioName`.
+     *
+     * @for AircraftModel
+     * @method _getControllerNamesForSector
+     * @param sectorType {string}
+     * @return {{log: string, spoken: string}}
+     * @private
+     */
+    _getControllerNamesForSector(sectorType) {
+        const airport = AirportController.airport_get();
+        const legacyName = airport && airport.radio ? airport.radio[sectorType] : sectorType;
+
+        if (!airport || !airport.controllerConfig) {
+            return { log: legacyName || sectorType || '', spoken: legacyName || sectorType || '' };
+        }
+
+        const config = airport.controllerConfig;
+        const normalizedType = String(sectorType || '').trim().toUpperCase();
+        let controller = null;
+
+        if (typeof config.getControllerForType === 'function') {
+            controller = config.getControllerForType(normalizedType);
+        }
+
+        if (!controller && typeof config.getControllerByCallsign === 'function') {
+            controller = config.getControllerByCallsign(sectorType);
+            if (!controller) controller = config.getControllerByCallsign(normalizedType);
+        }
+
+        if (controller) {
+            return {
+                log: controller.callsign || legacyName || sectorType || '',
+                spoken: config.getRadioNameForController(controller, normalizedType) || legacyName || sectorType || ''
+            };
+        }
+
+        return { log: legacyName || sectorType || '', spoken: legacyName || sectorType || '' };
+    }
+
+    /**
      * @for AircraftModel
      * @method radioCall
      * @param msg {string}
      * @param sectorType {string}
-     * @param alert {string}
+     * @param alert {boolean}
      */
     radioCall(msg, sectorType, alert) {
         if (this.projected) {
             return;
         }
 
-        const writtenCallsign = this.readbackCallsign;
-        const spokenCallsign = this.getRadioCallsign();
-
-        // let call = '';
-        //
-        // if (sectorType) {
-        //     call += AirportController.airport_get().radio[sectorType];
-        // }
-        //
-        // call += ", " + this.callsign + " " + msg;
-
-        // TODO: quick abstraction, this doesn't belong here.
-        const logMessage = (callsign) => `${AirportController.airport_get().radio[sectorType]}, ${callsign} ${msg}`;
+        const names = this._getControllerNamesForSector(sectorType);
+        const logMessage = names.log ? `${names.log}, ${this.readbackCallsign} ${msg}` : `${this.readbackCallsign} ${msg}`;
 
         if (alert) {
-            const isWarning = true;
-            UiController.ui_log(logMessage(writtenCallsign), isWarning);
+            UiController.ui_log(logMessage, true);
         } else {
-            UiController.ui_log(logMessage(writtenCallsign));
+            UiController.ui_log(logMessage);
         }
 
         speech_say(
-            [{
-                type: 'text',
-                content: logMessage(spokenCallsign)
-            }],
+            [
+                { type: 'text', content: `${names.spoken}, ` },
+                { type: 'callsign', content: this },
+                { type: 'text', content: ` ${radio_spokenText(msg)}` }
+            ],
             this.pilotVoice
         );
     }
@@ -1247,20 +1478,24 @@ export default class AircraftModel {
                 alt_say = `at ${radio_altitude(alt)}`;
             }
 
-            UiController.ui_log(`${AirportController.airport_get().radio.app}, ${this.readbackCallsign} with you ${alt_log}`);
+            const appNames = this._getControllerNamesForSector(AIRPORT_CONTROL_POSITION_NAME.APPROACH);
+
+            UiController.ui_log(`${appNames.log}, ${this.readbackCallsign} with you ${alt_log}`);
             speech_say(
                 [
-                    { type: 'text', content: `${AirportController.airport_get().radio.app}, ` },
+                    { type: 'text', content: `${appNames.spoken}, ` },
                     { type: 'callsign', content: this },
                     { type: 'text', content: `with you ${alt_say}` }
                 ],
                 this.pilotVoice
             );
         } else {
-            UiController.ui_log(`${AirportController.airport_get().radio.twr}, ${this.readbackCallsign}, ready to taxi`);
+            const twrNames = this._getControllerNamesForSector(AIRPORT_CONTROL_POSITION_NAME.TOWER);
+
+            UiController.ui_log(`${twrNames.log}, ${this.readbackCallsign}, ready to taxi`);
             speech_say(
                 [
-                    { type: 'text', content: AirportController.airport_get().radio.twr },
+                    { type: 'text', content: `${twrNames.spoken}, ` },
                     { type: 'callsign', content: this },
                     { type: 'text', content: ', ready to taxi' }
                 ],
@@ -1390,13 +1625,18 @@ export default class AircraftModel {
      */
     updateTarget() {
         if (this.vfrOrbit) {
-            const reportingPoint = this.vfrOrbit.reportingPoint;
+            const { reportingPoint } = this.vfrOrbit;
             if (reportingPoint && this.positionModel.distanceToPosition(reportingPoint.position) < 0.35 && !this.projected) {
-                this.radioCall(`over ${reportingPoint.name}, ${Math.round(this.altitude)} feet, remaining OCTA`, 'app');
+                this.radioCall(
+                    `over ${NavigationLibrary.getFixSpokenName(reportingPoint.name)}, ` +
+                    `${radio_altitude(this.altitude)}, remaining OCTA`,
+                    AIRPORT_CONTROL_POSITION_NAME.APPROACH
+                );
                 this.vfrOrbit.reportingPoint = null;
             }
             this.targetGroundTrack = this.vfrOrbit.reportingPoint ?
-                this.positionModel.bearingToPosition(this.vfrOrbit.reportingPoint.position) : orbitTrack(this.vfrOrbit, this.positionModel);
+                this.positionModel.bearingToPosition(this.vfrOrbit.reportingPoint.position) :
+                orbitTrack(this.vfrOrbit, this.positionModel);
             this.target.altitude = this.mcp.altitudeMode === MCP_MODE.ALTITUDE.HOLD ?
                 _defaultTo(this._calculateTargetedAltitude(), this.vfrOrbit.altitude) :
                 this.vfrOrbit.altitude;
@@ -1968,7 +2208,10 @@ export default class AircraftModel {
         }
 
         if (shouldMoveToNextFix) {
-            if (this.isTrackingOutbound() && this.isControllable && !this.projected) {
+            if (this.isTrackingOutbound() &&
+                this.isControllable &&
+                !this.projected &&
+                !this.isAustralianOperation()) {
                 this.transferToCentre();
             }
             if (!this.fms.hasNextWaypoint()) {
@@ -2432,7 +2675,7 @@ export default class AircraftModel {
 
         const secondsElapsed = TimeKeeper.getDeltaTimeForGameStateAndTimewarp();
         const angle_diff = angle_offset(this.targetHeading, this.heading);
-        const angle_change = PERFORMANCE.TURN_RATE * secondsElapsed;
+        const angle_change = (this.octaRequired ? turnRate(this) : PERFORMANCE.TURN_RATE) * secondsElapsed;
 
         // TODO: clean this up if possible, there is a lot of branching logic here
         if (abs(angle_diff) <= angle_change) {
@@ -2594,6 +2837,7 @@ export default class AircraftModel {
                 distanceTraveled_nm = Math.min(distanceTraveled_nm, this.positionModel.distanceToPosition(this.vfrOrbit.center));
             }
         }
+
         this.positionModel.setCoordinatesByBearingAndDistance(groundTrack, distanceTraveled_nm);
 
         this.groundTrack = groundTrack;
@@ -2734,6 +2978,7 @@ export default class AircraftModel {
     update() {
         this.updateFlightPhase();
         this.updateTarget();
+        enforceOcta(this, AirportController.current, TimeKeeper.accumulatedDeltaTime);
         this.updatePhysics();
         this._updateAircraftControllability();
     }
@@ -2828,9 +3073,15 @@ export default class AircraftModel {
         if (this.projected || !this.isControllable || this.transferredToCentre || !this.isTrackingOutbound()) {
             return false;
         }
+
+        const airport = AirportController.airport_get();
         this.transferredToCentre = true;
         this.isControllable = false;
-        this.setIsRemovable();
+
+        if (!this.isAustralianOperation() || !airport || !this.isInsideAirspace(airport)) {
+            this.setIsRemovable();
+        }
+
         EventBus.trigger(AIRCRAFT_EVENT.AIRSPACE_EXIT, this);
         return true;
     }
@@ -2841,19 +3092,80 @@ export default class AircraftModel {
      * @private
      */
     _updateAircraftControllability() {
-        if (this.projected || this.transferredToCentre || this.rules === FLIGHT_RULES.VFR) {
+        if (this.projected) {
             return;
         }
 
-        const isInsideAirspace = this.isInsideAirspace(AirportController.airport_get());
+        if (!this.isAustralianOperation()) {
+            if (this.transferredToCentre || this.rules === FLIGHT_RULES.VFR) {
+                return;
+            }
 
-        if (this.isControllable === isInsideAirspace) {
+            const isInsideAirspace = this.isInsideAirspace(AirportController.airport_get());
+
+            if (this.isControllable === isInsideAirspace) {
+                return;
+            }
+
+            if (!isInsideAirspace && this.transferToCentre()) return;
+            this.isControllable = isInsideAirspace;
+            this._contactAircraftAfterControllabilityChange();
             return;
         }
 
-        if (!isInsideAirspace && this.transferToCentre()) return;
-        this.isControllable = isInsideAirspace;
-        this._contactAircraftAfterControllabilityChange();
+        const airport = AirportController.airport_get();
+        const cs = this.controllerState;
+        const isTransferredOrReleased = this.transferredToCentre ||
+            cs.communicationReleased ||
+            cs.currentController === CONTROLLER_TYPE.TWR ||
+            cs.currentController === CONTROLLER_TYPE.CTR ||
+            cs.currentController === CONTROLLER_TYPE.UNICOM ||
+            cs.handoffState === HANDOFF_STATE.RELEASED;
+
+        if (isTransferredOrReleased) {
+            this.syncControllabilityFromControllerState();
+
+            if (!this.isRemovable &&
+                (this.transferredToCentre ||
+                    cs.currentController === CONTROLLER_TYPE.CTR ||
+                    cs.communicationReleased ||
+                    cs.handoffState === HANDOFF_STATE.RELEASED) &&
+                airport &&
+                !this.isInsideAirspace(airport)) {
+                this.setIsRemovable();
+            }
+
+            return;
+        }
+
+        if (this.rules === FLIGHT_RULES.VFR || this.isDeparture()) {
+            this.syncControllabilityFromControllerState();
+            return;
+        }
+
+        if (cs.currentController === CONTROLLER_TYPE.NONE && airport) {
+            const isInsideAirspace = this.isInsideAirspace(airport);
+
+            if (isInsideAirspace) {
+                const config = airport.controllerConfig;
+                const approachCfg = config && typeof config.getApproach === 'function' ?
+                    config.getApproach() :
+                    null;
+
+                this.setControllerState({
+                    currentController: CONTROLLER_TYPE.APP,
+                    currentFrequency: approachCfg ? approachCfg.frequency : null,
+                    handoffState: HANDOFF_STATE.NONE
+                });
+                this._contactAircraftAfterControllabilityChange();
+            } else {
+                this.syncControllabilityFromControllerState();
+            }
+
+            return;
+        }
+
+        this.syncControllabilityFromControllerState();
     }
 
     /**

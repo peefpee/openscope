@@ -1,3 +1,4 @@
+import { buildLayerControls } from './AirspaceLayers';
 import $ from 'jquery';
 import EventBus from '../lib/EventBus';
 import { SELECTORS, CLASSNAMES } from '../constants/selectors';
@@ -160,6 +161,7 @@ export default class VideoMapController {
         this.$dialogBody.empty();
 
         const airportModel = AirportController.airport_get();
+        if (/^Y/i.test(airportModel.icao)) this.$dialogBody.append(buildLayerControls());
         const mapNames = airportModel.mapCollection.getMapNames();
         this._selectedMaps = airportModel.mapCollection.getVisibleMapNames();
 

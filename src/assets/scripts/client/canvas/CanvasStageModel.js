@@ -352,8 +352,17 @@ class CanvasStageModel {
      * @for CanvasStageModel
      * @method zoomReset
      */
-    zoomReset() {
-        this._scale = this._defaultScale;
+    zoomWithin(zoomIn, minimum, maximum) {
+        const next = Math.min(maximum, Math.max(minimum, this._scale * (zoomIn ? 1 / SCALE.CHANGE_FACTOR : SCALE.CHANGE_FACTOR)));
+        const ratio = next / this._scale;
+        this._scale = next;
+        this.updatePan(this._panX * ratio, this._panY * ratio);
+        this._storeZoomLevel();
+        this._eventBus.trigger(EVENT.ZOOM_VIEWPORT);
+    }
+
+    zoomReset(airportDefault) {
+        this._scale = Number.isFinite(airportDefault) && airportDefault > 0 ? airportDefault : this._defaultScale;
 
         this._storeZoomLevel();
         this._eventBus.trigger(EVENT.ZOOM_VIEWPORT);

@@ -14,22 +14,20 @@ import EventBus from '../../src/assets/scripts/client/lib/EventBus';
 import NavigationLibrary from '../../src/assets/scripts/client/navigationLibrary/NavigationLibrary';
 import a320 from '../../assets/aircraft/a320.json';
 
-test.serial('departures track the selected outbound and transfer ownership once', (t) => {
+function createDatAirportFixture(filename) {
     const data = parseAirportDat([
         'RWY:RW18, , ,00010, , , , ;S37000000,E145000000,0000;',
         'RWY:RW36, , ,00010, , , , ;S37010000,E145000000,0000;'
-    ].join('\n'), 'YTES.dat');
+    ].join('\n'), filename);
     const scope = buildDatScope(data, resolveWaypoints(data, [
         '-37.9 145 EXITX ENRT YM 4530263', '-38 145.1 EXITY ENRT YM 4530263', '-37.4 145 INNER ENRT YM 4530263',
         '-37.91 145 RIVER ENRT YM 2105430 River Crossing'
     ].join('\n')));
-    const departure = scope.spawnPatterns.find((p) => p.category === 'departure');
-    t.deepEqual(departure.outboundRoutes, ['_SIMOUT..EXITX', '_SIMOUT..EXITY']);
-    const airport = new AirportModel(scope);
-    airport.data = scope;
-    AirportController.current = airport;
-    NavigationLibrary.init(scope);
-    const runway = airport.departureRunwayModel;
+
+    return scope;
+}
+
+test.serial('departures track the selected outbound and transfer ownership once', (t) => {
     const commander = new AircraftCommander();
     const frameTime = TimeKeeper.getDeltaTimeForGameStateAndTimewarp;
     TimeKeeper.getDeltaTimeForGameStateAndTimewarp = () => 1;
@@ -38,11 +36,30 @@ test.serial('departures track the selected outbound and transfer ownership once'
     EventBus.on(AIRCRAFT_EVENT.AIRSPACE_EXIT, recordExit);
     try {
         for (const manual of [false, true]) {
+            const icao = manual ? 'YTES' : 'KTES';
+            const scope = createDatAirportFixture(`${icao}.dat`);
+            const departure = scope.spawnPatterns.find((p) => p.category === 'departure');
+            t.deepEqual(departure.outboundRoutes, ['_SIMOUT..EXITX', '_SIMOUT..EXITY']);
+            const airport = new AirportModel(scope);
+            airport.data = scope;
+            AirportController.current = airport;
+            NavigationLibrary.init(scope);
+            const runway = airport.departureRunwayModel;
+
             const plane = new AircraftModel({
-                airline: 'jst', callsign: '22', airlineCallsign: 'jetstar', category: 'departure', origin: 'YTES', destination: '',
-                altitude: 10, speed: 0, heading: runway.angle, model: new AircraftTypeDefinitionModel(a320),
+                airline: 'jst',
+                callsign: '22',
+                airlineCallsign: 'jetstar',
+                category: 'departure',
+                origin: icao,
+                destination: '',
+                altitude: 10,
+                speed: 0,
+                heading: runway.angle,
+                model: new AircraftTypeDefinitionModel(a320),
                 positionModel: runway.positionModel.generateDynamicPositionFromBearingAndDistance(0, 0),
-                routeString: departure.outboundRoutes[0], vectors: departure.vectors
+                routeString: departure.outboundRoutes[0],
+                vectors: departure.vectors
             });
             const transmit = (text) => {
                 const [name, ...args] = new CommandParser(`jst22 ${text}`).parse().args[0];
@@ -83,12 +100,85 @@ test.serial('departures track the selected outbound and transfer ownership once'
             }
             t.true(plane.transferredToCentre);
             t.false(plane.isControllable);
-            t.true(plane.isRemovable);
+            if (!manual) {
+                t.true(plane.isRemovable);
+            } else {
+                // Transferred Australian departures remain physically simulated while inside controlled airspace
+                t.false(plane.isRemovable);
+                for (let i = 0; i < 1400 && plane.isInsideAirspace(airport); i++) {
+                    plane.update();
+                }
+                t.false(plane.isInsideAirspace(airport));
+                t.true(plane.isRemovable);
+            }
             t.false(plane.transferToCentre());
             plane._updateAircraftControllability();
             t.false(plane.isControllable);
             t.is(handoffs.filter((flight) => flight === plane).length, 1);
+
+            airport.releaseWindListener();
+            NavigationLibrary.reset();
+            AirportController.reset();
         }
+    } finally {
+        EventBus.off(AIRCRAFT_EVENT.AIRSPACE_EXIT, recordExit);
+        TimeKeeper.getDeltaTimeForGameStateAndTimewarp = frameTime;
+        NavigationLibrary.reset();
+        AirportController.reset();
+    }
+});
+
+test.serial('Australian departures do not silently auto-transfer when passing outbound fix', (t) => {
+    const scope = createDatAirportFixture('YTES.dat');
+    const departure = scope.spawnPatterns.find((p) => p.category === 'departure');
+    const airport = new AirportModel(scope);
+    airport.data = scope;
+    AirportController.current = airport;
+    NavigationLibrary.init(scope);
+    const runway = airport.departureRunwayModel;
+    const commander = new AircraftCommander();
+    const frameTime = TimeKeeper.getDeltaTimeForGameStateAndTimewarp;
+    TimeKeeper.getDeltaTimeForGameStateAndTimewarp = () => 1;
+    const handoffs = [];
+    const recordExit = (plane) => handoffs.push(plane);
+    EventBus.on(AIRCRAFT_EVENT.AIRSPACE_EXIT, recordExit);
+    try {
+        const plane = new AircraftModel({
+            airline: 'jst',
+            callsign: '23',
+            airlineCallsign: 'jetstar',
+            category: 'departure',
+            origin: 'YTES',
+            destination: '',
+            altitude: 10,
+            speed: 0,
+            heading: runway.angle,
+            model: new AircraftTypeDefinitionModel(a320),
+            positionModel: runway.positionModel.generateDynamicPositionFromBearingAndDistance(0, 0),
+            routeString: departure.outboundRoutes[0],
+            vectors: departure.vectors
+        });
+        const transmit = (text) => {
+            const [name, ...args] = new CommandParser(`jst23 ${text}`).parse().args[0];
+            return commander.run(plane, name, args)[0];
+        };
+        plane.takeoff(runway);
+        let passedOutboundFix = false;
+        for (let i = 0; i < 1400; i++) {
+            plane.update();
+            if (i === 370) {
+                t.true(transmit('direct EXITX'));
+            }
+            if (i > 370 && !plane.fms.currentWaypoint) {
+                passedOutboundFix = true;
+                break;
+            }
+        }
+        t.true(passedOutboundFix || plane.positionModel.distanceToPosition(runway.positionModel) > 45);
+        t.false(plane.transferredToCentre);
+        t.true(plane.isControllable);
+        t.true(plane.isPlayerControlled());
+        t.is(handoffs.length, 0);
     } finally {
         EventBus.off(AIRCRAFT_EVENT.AIRSPACE_EXIT, recordExit);
         TimeKeeper.getDeltaTimeForGameStateAndTimewarp = frameTime;

@@ -9,7 +9,8 @@ import {
     isLegLengthArg,
     timewarpParser,
     optionalAltitudeParser,
-    crossingParser
+    crossingParser,
+    contactParser
 } from '../../../src/assets/scripts/client/commands/parsers/argumentParsers';
 
 ava('.altitudeParser() converts a string flight level altitude to a number altitude in thousands', t => {
@@ -253,4 +254,11 @@ ava('.crossingParser() returns an array with the correct values when provided sp
 
     t.true(result[0] === 'LEMDY');
     t.true(result[2] === 210);
+});
+
+ava('.contactParser() lowercases controller type and normalizes VHF frequency to 3 decimals', (t) => {
+    t.deepEqual(contactParser(['twr', '120.5']), ['twr', '120.500']);
+    t.deepEqual(contactParser(['TWR', '120.50']), ['twr', '120.500']);
+    t.deepEqual(contactParser(['CTR', '132.0']), ['ctr', '132.000']);
+    t.deepEqual(contactParser(['ctr', '133.15']), ['ctr', '133.150']);
 });

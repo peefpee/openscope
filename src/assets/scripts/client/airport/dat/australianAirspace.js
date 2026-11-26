@@ -1,42 +1,10 @@
 import AirspaceModel from '../AirspaceModel';
+import { nm } from '../../utilities/unitConverters';
 import navData from './NavDataCache';
+import { readOpenAir } from './parseOpenAir';
 
-function limit(text) {
-    if (/^(GND|SFC)$/.test(text)) return { feet: 0, agl: true };
-    const fl = /^FL\s*(\d+)$/.exec(text);
-    if (fl) return { feet: Number(fl[1]) * 100 };
-    const match = /^(\d+)\s*(?:FT\s*)?(MSL|AMSL|AGL)?$/.exec(text);
-    return match && { feet: Number(match[1]), agl: match[2] === 'AGL' };
-}
-
-// X-Plane's OpenAir export describes boundaries as DP vertices.
 export function parseAustralianAirspace(text) {
-    const regions = [];
-    for (const block of text.split(/^AC\s+/m).slice(1)) {
-        const [kind, ...lines] = block.trim().split(/\r?\n/);
-        if (!/^(?:[A-E]|CTR)$/.test(kind.trim())) continue;
-        let name = '';
-        let floor, ceiling;
-        const poly = [];
-        for (const line of lines) {
-            if (line.startsWith('AN ')) name = line.slice(3).trim();
-            if (line.startsWith('AL ')) floor = limit(line.slice(3).trim());
-            if (line.startsWith('AH ')) ceiling = limit(line.slice(3).trim());
-            if (/^(DB|DA|DC) /.test(line)) break;
-            if (!line.startsWith('DP ')) continue;
-            const m = /^DP\s+(\d+):(\d+):([\d.]+) S\s+(\d+):(\d+):([\d.]+) E\s*$/.exec(line);
-            if (!m) { poly.length = 0; break; }
-            const lat = -(+m[1] + m[2] / 60 + m[3] / 3600);
-            const lon = +m[4] + m[5] / 60 + m[6] / 3600;
-            if (lat < -56 || lat > -8 || lon < 90 || lon > 170) { poly.length = 0; break; }
-            poly.push([lat, lon]);
-        }
-        if (floor && ceiling && poly.length >= 3 && !/^(DB|DA|DC) /m.test(block)) {
-            regions.push({ name, airspace_class: kind.trim(), floor, ceiling, poly });
-        }
-    }
-    if (!regions.length) throw new Error('No Australian controlled-airspace polygons found in airspace.txt.');
-    return regions;
+    return readOpenAir(text).regions;
 }
 
 export function australianShelves(airport, data) {
@@ -45,6 +13,7 @@ export function australianShelves(airport, data) {
     const top = airport.ctr_ceiling;
     const record = navData.records.get('au-airspace');
     const models = [];
+    const groundAt = (position) => airport.terrainElevationAt(position);
     for (const region of (record && record.regions) || []) {
         const feet = (value) => value.feet + (value.agl ? elevation : 0);
         const floor = feet(region.floor);
@@ -56,15 +25,21 @@ export function australianShelves(airport, data) {
             region.poly.some(([,lon]) => lon > center.longitude);
         if (!near && !surrounds) continue;
         const model = new AirspaceModel({ ...region, floor: 0, ceiling: 0 }, center, airport.magneticNorth);
-        if (!model.isPointInside2D([0, 0]) && model.distanceToBoundary([0, 0]) > 45) continue;
+        if (!model.isPointInside2D([0, 0]) && model.distanceToBoundary([0, 0]) > Math.max(10, nm(airport.ctr_radius)) + 5) continue;
         model.name = region.name;
+        model.airspace_class = region.airspace_class || '';
+        model.type = region.type === 'AIRSPACE' || !region.type ?
+            ((/\b(CTR|CTA)\b/i.exec(region.name) || [])[1] || 'AIRSPACE').toUpperCase() : region.type;
+        model.source = 'imported';
+        model.verticalLimits = { lower: region.floor, upper: region.ceiling, sectorTop: top, groundAt };
         model.floor = floor;
         model.ceiling = ceiling;
         models.push(model);
     }
-    const hasLocalDefinition = models.some((area) => area.isPointInside2D([0, 0]) &&
-        (area.floor <= elevation + 2000 || (area.airspace_class !== 'A' && /\b(?:CTA|CTR)\b/i.test(area.name))));
-    if (hasLocalDefinition) return models;
+    // A successfully parsed file conveys no regional completeness guarantee. Fill gaps
+    // unless the airport explicitly declares complete coverage. At a point, an imported
+    // class (including G) wins over the underlying manual or simulated shelf.
+    if (models.length && data.airspaceCoverage === 'complete' && !record.rejected) return models;
     if (!data.isDatImport && airport.airspace && airport.airspace.length) {
         const defined = airport.airspace.filter((area) => /^[A-E]$|^CTR$/.test(area.airspace_class));
         if (defined.length) return [...models, ...defined.map((area) => {
@@ -73,12 +48,25 @@ export function australianShelves(airport, data) {
             return capped;
         })];
     }
-    const ring = (radius, floor) => {
-        const poly = Array.from({ length: 120 }, (_, i) => center.generateCoordinatesFromBearingAndDistance(i * Math.PI / 60, radius));
+    const ring = (radius) => Array.from({ length: 120 }, (_, i) =>
+        center.generateCoordinatesFromBearingAndDistance(i * Math.PI / 60, radius));
+    const simulated = (poly, type, floor, ceiling) => {
         const model = new AirspaceModel({ poly, floor: 0, ceiling: 0, airspace_class: 'C' }, center, airport.magneticNorth);
         model.floor = floor;
-        model.ceiling = top;
+        model.ceiling = ceiling;
+        model.type = type;
+        model.source = 'simulated';
+        const lower = { agl: true, feet: type === 'CTR' ? 0 : 2000 };
+        const upper = type === 'CTR' ? { agl: true, feet: 2000 } : { feet: top };
+        model.verticalLimits = { lower, upper, sectorTop: top, groundAt };
         return model;
     };
-    return [...models, ring(10, elevation), ring(40, elevation + 2000)];
+    const shelfBase = elevation + 2000;
+    models.push(simulated(ring(10), 'CTR', elevation, Math.min(top, shelfBase)));
+    if (top > shelfBase) {
+        const sectors = data.airspace && data.airspace.length ? data.airspace.map((area) => area.poly) :
+            [ring(nm(airport.ctr_radius))];
+        sectors.forEach((poly) => models.push(simulated(poly, 'CTA', shelfBase, top)));
+    }
+    return models;
 }

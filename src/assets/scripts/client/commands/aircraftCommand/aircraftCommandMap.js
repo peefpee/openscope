@@ -59,6 +59,11 @@ export const AIRCRAFT_COMMAND_MAP = {
         functionName: 'runClimbViaSID',
         isSystemCommand: false
     },
+    contact: {
+        aliases: ['contact'],
+        functionName: 'runContact',
+        isSystemCommand: false
+    },
     cross: {
         aliases: ['cross', 'cr', 'x'],
         functionName: 'runCross',
@@ -99,6 +104,11 @@ export const AIRCRAFT_COMMAND_MAP = {
         functionName: 'runFlyPresentHeading',
         isSystemCommand: false
     },
+    freqChangeApproved: {
+        aliases: ['fca', 'freqchangeapproved'],
+        functionName: 'runFreqChangeApproved',
+        isSystemCommand: false
+    },
     heading: {
         aliases: ['fh', 'h', 'heading', 't', 'turn'],
         functionName: 'runHeading',
@@ -124,6 +134,7 @@ export const AIRCRAFT_COMMAND_MAP = {
         functionName: 'runCentre',
         isSystemCommand: false
     },
+    clearentry: { aliases: ['clearentry'], functionName: 'runClearEntry', isSystemCommand: false },
     octa: { aliases: ['octa'], functionName: 'runOcta', isSystemCommand: false },
     dw: { aliases: ['dw'], functionName: 'runCircuit', isSystemCommand: false },
     xw: { aliases: ['xw'], functionName: 'runCircuit', isSystemCommand: false },

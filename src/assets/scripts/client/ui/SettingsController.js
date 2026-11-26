@@ -1,4 +1,5 @@
 import $ from 'jquery';
+import { controlsSettings } from './ScopeControls';
 import _forEach from 'lodash/forEach';
 import _isNaN from 'lodash/isNaN';
 import GameController from '../game/GameController';
@@ -107,6 +108,7 @@ export default class SettingsController {
             this.$dialogBody.append($container);
         });
 
+        this.$dialogBody.append(controlsSettings());
         const $version = this._buildVersionTemplate();
 
         this.$dialog.append($version);

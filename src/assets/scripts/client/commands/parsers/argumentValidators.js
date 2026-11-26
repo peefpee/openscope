@@ -8,6 +8,7 @@ import {
     INVALID_INDEX,
     REGEX
 } from '../../constants/globalConstants';
+import { normalizeFrequency } from '../../constants/controllerConstants';
 
 /**
  * Check that `args` has exactly zero values
@@ -378,5 +379,32 @@ export const crossingValidator = (args = []) => {
         } else if (speed == null) {
             return ERROR_MESSAGE.SPEED_MUST_BE_NUMBER;
         }
+    }
+};
+
+/**
+ * Checks that args has a valid controller type ('twr' or 'ctr') and VHF COM frequency
+ *
+ * @function contactValidator
+ * @param args {array}
+ * @return {string|undefined}
+ */
+export const contactValidator = (args = []) => {
+    if (args.length !== 2) {
+        return ERROR_MESSAGE.TWO_ARG_LENGTH;
+    }
+
+    if (!_isString(args[0]) || !_isString(args[1])) {
+        return ERROR_MESSAGE.MUST_BE_STRING;
+    }
+
+    const controllerType = args[0].trim().toLowerCase();
+
+    if (controllerType !== 'twr' && controllerType !== 'ctr') {
+        return ERROR_MESSAGE.INVALID_CONTROLLER_TYPE;
+    }
+
+    if (normalizeFrequency(args[1]) === null) {
+        return ERROR_MESSAGE.INVALID_FREQUENCY;
     }
 };

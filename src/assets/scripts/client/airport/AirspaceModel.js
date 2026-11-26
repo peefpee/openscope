@@ -112,6 +112,9 @@ export default class AirspaceModel extends BaseModel {
         this.airspace_class = data.airspace_class;
         this.poly = this._buildPolyPositionModels(data.poly, airportPosition, magneticNorth);
         this.relativePoly = _map(this.poly, (v) => v.relativePosition);
+        this.bounds = this.relativePoly.reduce(([left, bottom, right, top], [x, y]) => [
+            Math.min(left, x), Math.min(bottom, y), Math.max(right, x), Math.max(top, y)
+        ], [Infinity, Infinity, -Infinity, -Infinity]);
 
         this._initLabelPositions(data, airportPosition, magneticNorth);
 
@@ -185,11 +188,21 @@ export default class AirspaceModel extends BaseModel {
      * @return {boolean}
      */
     isPointInside(point, altitude) {
-        if (altitude < this.floor || this.ceiling < altitude) {
+        const [left, bottom, right, top] = this.bounds;
+        if (point[0] < left || point[0] > right || point[1] < bottom || point[1] > top) return false;
+        const [floor, ceiling] = this.altitudeLimitsAt(point);
+        if (altitude < floor || ceiling < altitude) {
             return false;
         }
 
         return this.isPointInside2D(point);
+    }
+
+    altitudeLimitsAt(point) {
+        if (!this.verticalLimits) return [this.floor, this.ceiling];
+        const { lower, upper, sectorTop, groundAt } = this.verticalLimits;
+        const ground = lower.agl || upper.agl ? groundAt(point) : 0;
+        return [lower.feet + (lower.agl ? ground : 0), Math.min(sectorTop, upper.feet + (upper.agl ? ground : 0))];
     }
 
     /**

@@ -1,3 +1,5 @@
+import { airspaceLabel, layerState, layerVisible } from '../ui/AirspaceLayers';
+import StaticPositionModel from '../base/StaticPositionModel';
 import $ from 'jquery';
 import _cloneDeep from 'lodash/cloneDeep';
 import _filter from 'lodash/filter';
@@ -259,6 +261,18 @@ export default class CanvasController {
         this._eventBus.on(EVENT.SELECT_AIRCRAFT, this._onSelectAircraftHandler);
         this._eventBus.on(EVENT.DESELECT_AIRCRAFT, this._onDeselectAircraftHandler);
         this._eventBus.on(EVENT.REQUEST_TO_CENTER_POINT_IN_VIEW, this._onCenterPointInViewHandler);
+        this._layersChanged = () => { this._markDeepRender(); };
+        this._eventBus.on(EVENT.AIRSPACE_LAYERS_CHANGE, this._layersChanged);
+        this.$element.on('mousemove.airspaceInfo', (event) => {
+            const airport = AirportController.current;
+            if (!airport || !/^Y/i.test(airport.icao) || !this._shouldDrawAirspace) return;
+            const pixel = CanvasStageModel.calculateCanvasPositionFromPagePosition(event.pageX, event.pageY);
+            const point = CanvasStageModel.calculateRelativePositionFromCanvasPosition(...pixel);
+            const labels = airport.airspaceRegions.filter((area) => layerVisible(area) && area.isPointInside2D(point))
+                .map((area) => [area.name, airspaceLabel(area), area.source || 'Airport configuration',
+                    area.controller, area.restrictions].filter(Boolean).join(' · '));
+            this.$element.attr('title', labels.join('\n'));
+        });
         this._eventBus.on(EVENT.PAN_VIEWPORT, this._onChangeViewportPanHandler);
         this._eventBus.on(EVENT.ZOOM_VIEWPORT, this._onChangeViewportZoomHandler);
         this._eventBus.on(EVENT.MARK_SHALLOW_RENDER, this._onMarkDirtyCanvasHandler);
@@ -287,7 +301,9 @@ export default class CanvasController {
         this._eventBus.off(EVENT.SELECT_AIRCRAFT, this._onSelectAircraftHandler);
         this._eventBus.off(EVENT.DESELECT_AIRCRAFT, this._onDeselectAircraftHandler);
         this._eventBus.off(EVENT.REQUEST_TO_CENTER_POINT_IN_VIEW, this._onCenterPointInView);
-        this._eventBus.off(EVENT.PAN_VIEWPORT, this._onChangeViewportPan);
+        this.$element.off('.airspaceInfo');
+        this._eventBus.off(EVENT.AIRSPACE_LAYERS_CHANGE, this._layersChanged);
+        this._eventBus.off(EVENT.PAN_VIEWPORT, this._onChangeViewportPanHandler);
         this._eventBus.off(EVENT.ZOOM_VIEWPORT, this._onChangeViewportZoom);
         this._eventBus.off(EVENT.MARK_SHALLOW_RENDER, this._onMarkDirtyCanvas);
         this._eventBus.off(EVENT.TOGGLE_AIRSPACE, this._onToggleAirspaceHandler);
@@ -1506,6 +1522,16 @@ export default class CanvasController {
         const radarTargetModels = this._scopeModel.radarTargetCollection.items;
 
         for (let i = 0; i < radarTargetModels.length; i++) {
+            const aircraft = radarTargetModels[i].aircraftModel;
+            const entry = aircraft.predictedEntry;
+            if (this._shouldDrawAirspace && entry && layerVisible(entry.region)) {
+                cc.save();
+                cc.strokeStyle = '#d6a254';
+                cc.fillStyle = '#d6a254';
+                this._drawRelativePoly(cc, entry.region.relativePoly, false);
+                this._drawText(cc, entry.position, [aircraft.callsign + ' ' + Math.ceil(entry.seconds) + 's']);
+                cc.restore();
+            }
             this._drawSingleRadarTarget(cc, radarTargetModels[i]);
         }
 
@@ -1928,9 +1954,21 @@ export default class CanvasController {
         cc.textAlign = 'center';
         cc.textBaseline = 'middle';
 
-        const shelves = airport.controlledShelves;
+        const australian = /^Y/i.test(airport.icao);
+        if (australian && !layerState.disabled.has('VFR')) {
+            cc.save();
+            this._ccTranslateFromCanvasOriginToAirportCenter(cc);
+            for (const fix of airport.data.vfrWaypoints || airport._vfrReports || []) {
+                if (!Array.isArray(fix.position)) continue;
+                const pos = new StaticPositionModel(fix.position, airport.positionModel, airport.magneticNorth);
+                this._drawText(cc, pos.relativePosition, ['△ ' + (fix.name || fix.id)]);
+            }
+            cc.restore();
+        }
+        const shelves = australian ? airport.airspaceRegions : airport.controlledShelves;
         for (let i = 0; i < shelves.length; i++) {
             const airspace = shelves[i];
+            if (australian && !layerVisible(airspace)) continue;
 
             cc.save(); // to allow reset of translation
             // required positioning to use _drawPoly
@@ -1941,7 +1979,8 @@ export default class CanvasController {
             const bottomFlightLevel = leftPad(Math.floor(airspace.floor / 100), 3);
             const topFlightLevel = leftPad(Math.ceil(airspace.ceiling / 100), 3);
             const classLabel = /^Y/i.test(airport.icao) ? `${airspace.airspace_class} ` : '';
-            const content = `${classLabel}${bottomFlightLevel}-${topFlightLevel} (#${i})`;
+            const source = airspace.source === 'simulated' ? ` SIM ${airspace.type}` : '';
+            const content = australian ? airspaceLabel(airspace) : `${classLabel}${bottomFlightLevel}-${topFlightLevel}${source} (#${i})`;
 
             cc.restore(); // reset from translation used for poly above
             cc.save();

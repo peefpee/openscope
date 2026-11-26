@@ -1,6 +1,6 @@
 import $ from 'jquery';
 import navData from '../airport/dat/NavDataCache';
-import { parseAustralianAirspace } from '../airport/dat/australianAirspace';
+import { readOpenAir } from '../airport/dat/parseOpenAir';
 import parseMsaDat from '../airport/dat/parseMsaDat';
 import AirportController from '../airport/AirportController';
 import { parseAirportDat } from '../airport/dat/parseAirportDat';
@@ -91,6 +91,20 @@ export default class DatImportView {
                         navData.save(this.airport);
                     }
                     if (name) this.scope.spokenAirportName = name;
+
+                    const controllerRadioNames = {
+                        approach: this.$dialog.find('#dat-approach-radio-name').val().trim(),
+                        departure: this.$dialog.find('#dat-departure-radio-name').val().trim(),
+                        tower: this.$dialog.find('#dat-tower-radio-name').val().trim(),
+                        centre: this.$dialog.find('#dat-centre-radio-name').val().trim()
+                    };
+
+                    if (Object.values(controllerRadioNames).some(Boolean)) {
+                        this.airport = { ...this.airport, controllerRadioNames };
+                        navData.save(this.airport);
+                    }
+
+                    Object.assign(this.scope, { controllerRadioNames });
                 }
                 AirportController.openImportedAirport(this.scope);
                 this.$dialog[0].close();
@@ -100,7 +114,8 @@ export default class DatImportView {
 
     // Serialize changes so a large fix file finishing late cannot replace a newer import.
     update(change) {
-        const version = ++this.version;
+        this.version += 1;
+        const { version } = this;
         this.scope = null;
         this.$dialog.find('footer').prop('hidden', true);
         this.$dialog.find('.dat-status').text('Reading navigation data…');
@@ -121,18 +136,26 @@ export default class DatImportView {
             const cycle = /data cycle (\d{4})/i.exec(text.slice(0, 1024));
             const record = { name: file.name, cycle: cycle ? cycle[1] : '' };
             if (id === 'dat-airspace-file') {
-                return navData.save({ ...record, key: 'au-airspace', regions: parseAustralianAirspace(text) });
+                return navData.save({ ...record, key: 'au-airspace', ...readOpenAir(text) });
             }
             if (id === 'dat-airport-file') {
                 const data = parseAirportDat(text, file.name);
                 const key = `airport/${data.icao}`;
-                this.airport = { ...navData.records.get(key), ...record, key, text };
+                this.airport = {
+                    ...navData.records.get(key), ...record, key, text
+                };
                 if (data.icao) return navData.save(this.airport);
             } else if (id === 'dat-msa-file') {
                 return navData.save({ ...record, key: 'msa', airports: parseMsaDat(text) }).then(this.onMsaChange);
             } else {
                 // Accept legacy five-column fix files, including headerless extracts.
-                if (!/^\s*[+-]?\d+(?:\.\d+)?[ \t]+[+-]?\d+(?:\.\d+)?[ \t]+[A-Z0-9]+[ \t]+(?:ENRT|[A-Z0-9]{4})[ \t]+[A-Z0-9]{2}(?:[ \t]|\r?$)/m.test(text)) {
+                const fixFilePattern = new RegExp(
+                    '^\\s*[+-]?\\d+(?:\\.\\d+)?[ \\t]+[+-]?\\d+(?:\\.\\d+)?[ \\t]+' +
+                    '[A-Z0-9]+[ \\t]+(?:ENRT|[A-Z0-9]{4})[ \\t]+[A-Z0-9]{2}(?:[ \\t]|\\r?$)',
+                    'm'
+                );
+
+                if (!fixFilePattern.test(text)) {
                     throw new Error('No waypoint coordinates found. Choose an X-Plane earth_fix.dat file.');
                 }
                 return navData.save({ ...record, key: 'fixes', text });
@@ -148,9 +171,27 @@ export default class DatImportView {
         if (!this.airport && airports.length === 1) this.airport = navData.records.get(airports[0]);
         $select.val(this.airport ? this.airport.key : '');
         this.$dialog.find('.dat-cached').prop('hidden', !airports.length);
-        for (const [key, selector] of [['fixes', '.dat-fix-source'], ['msa', '.dat-msa-source'], ['au-airspace', '.dat-airspace-source']]) {
+        const sourceSelectors = {
+            fixes: '.dat-fix-source',
+            msa: '.dat-msa-source',
+            'au-airspace': '.dat-airspace-source'
+        };
+
+        for (const [key, selector] of Object.entries(sourceSelectors)) {
             const record = navData.records.get(key);
-            this.$dialog.find(selector).text(record ? `In use: ${record.name}${record.cycle ? ` · AIRAC ${record.cycle}` : ''}` : '');
+            const cycle = record && record.cycle ? ` · AIRAC ${record.cycle}` : '';
+
+            this.$dialog.find(selector).text(record ? `In use: ${record.name}${cycle}` : '');
+        }
+        const airspace = navData.records.get('au-airspace');
+        if (airspace && airspace.warnings) {
+            const classes = [...new Set(airspace.regions.map((area) => area.airspace_class || area.type))];
+            const summary = `${airspace.regions.length} imported · ${airspace.rejected} rejected · ` +
+                `${airspace.approximated} curved boundaries approximated`;
+            const details = section(summary);
+            details.append($('<p>').text(`Classes and types: ${classes.join(', ')}. Regional coverage unverified.`));
+            airspace.warnings.forEach((warning) => details.append($('<p>').text(warning)));
+            this.$dialog.find('.dat-airspace-source').append(details);
         }
         this.$dialog.find('.dat-cache-status').text(navData.memoryOnly.size || !navData.db ?
             'Browser storage is unavailable for some files. Those files are available for this session only.' :
@@ -166,7 +207,20 @@ export default class DatImportView {
         const waypoints = resolveWaypoints(data, fixes && fixes.text);
         this.scope = buildDatScope(data, waypoints);
         this.$dialog.find('.dat-spoken-name').prop('hidden', !this.scope || !data.icao.startsWith('Y'));
-        this.$dialog.find('#dat-spoken-name').val(this.airport.spokenAirportName || (this.scope && this.scope.spokenAirportName) || '');
+        const spokenAirportName = this.airport.spokenAirportName ||
+            (this.scope && this.scope.spokenAirportName) || '';
+
+        this.$dialog.find('#dat-spoken-name').val(spokenAirportName);
+        const controllerNames = this.airport.controllerRadioNames || {};
+        this.$dialog.find('.dat-controller-names').prop('hidden', !this.scope || !data.icao.startsWith('Y'));
+        for (const [key, selector] of Object.entries({
+            approach: '#dat-approach-radio-name',
+            departure: '#dat-departure-radio-name',
+            tower: '#dat-tower-radio-name',
+            centre: '#dat-centre-radio-name'
+        })) {
+            this.$dialog.find(selector).val(controllerNames[key] || '');
+        }
         renderDetails($results, data);
         const count = `${waypoints.total - waypoints.missing} of ${waypoints.total} named fixes located`;
         const status = [`${data.icao || this.airport.name} · ${count}.`];
@@ -176,7 +230,9 @@ export default class DatImportView {
             status.push(`Available for clearance: ${sidCount}/${data.procedures.SID.size} SIDs and ` +
                 `${starCount}/${data.procedures.STAR.size} STARs.`);
             const vectors = [...new Set(Object.values(this.scope.routeLabels))];
-            if (vectors.length) status.push(`Using ${vectors.join(' and ').toLowerCase()} on runway ${this.scope.arrivalRunway}.`);
+            if (vectors.length) {
+                status.push(`Using ${vectors.join(' and ').toLowerCase()} on runway ${this.scope.arrivalRunway}.`);
+            }
         }
         if (waypoints.missing) {
             if (!fixes) status.push('Add the matching earth_fix.dat to locate procedure fixes.');
