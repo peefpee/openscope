@@ -1991,6 +1991,15 @@ export default class CanvasController {
             cc.restore();
         }
         const shelves = australian ? airport.airspaceRegions : airport.controlledShelves;
+        const placedLabelBoxes = [];
+        const labelHeight = 14;
+        const overlapsPlaced = (box) => placedLabelBoxes.some((other) => (
+            box.left < other.right &&
+            box.right > other.left &&
+            box.top < other.bottom &&
+            box.bottom > other.top
+        ));
+
         for (let i = 0; i < shelves.length; i++) {
             const airspace = shelves[i];
             if (australian) {
@@ -2018,9 +2027,36 @@ export default class CanvasController {
             // required positioning to use _drawText
             this._ccTranslateFromCanvasOriginToAirportCenter(cc);
 
-            // draw labels
+            const measuredWidth = typeof cc.measureText === 'function' ?
+                cc.measureText(content).width :
+                content.length * 7.5;
+            const halfW = (measuredWidth + 8) / 2;
+            const halfH = labelHeight / 2;
+
+            // draw labels without overlapping each other or the airport centre runways
             for (const labelRelativePosition of airspace.labelRelativePositions) {
-                this._drawText(cc, labelRelativePosition, [content]);
+                const [baseX, baseY] = CanvasStageModel.calculateRoundedCanvasPositionFromRelativePosition(labelRelativePosition);
+                const nearCenter = Math.hypot(labelRelativePosition[0], labelRelativePosition[1]) < 1;
+                const candidateOffsets = nearCenter ?
+                    [-42, -58, 42, 58, -74, 74, -90, 90, -106, 106] :
+                    [0, -16, 16, -32, 32, -48, 48, -64, 64];
+
+                let drawY = baseY + candidateOffsets[0];
+                for (const dy of candidateOffsets) {
+                    const y = baseY + dy;
+                    const box = {
+                        left: baseX - halfW,
+                        right: baseX + halfW,
+                        top: y - halfH,
+                        bottom: y + halfH
+                    };
+                    if (!overlapsPlaced(box)) {
+                        drawY = y;
+                        placedLabelBoxes.push(box);
+                        break;
+                    }
+                }
+                cc.fillText(content, baseX, drawY);
             }
 
             cc.restore();
