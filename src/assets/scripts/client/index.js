@@ -29,8 +29,16 @@ if (session) {
     const Menu = require('./session/Menu').default;
     document.getElementById('radar-workspace').remove();
     const menu = new Menu();
-    window.addEventListener('pagehide', () => menu.dispose());
+    const { mountMenuVisuals } = require('./session/visual');
+    let visuals = mountMenuVisuals(menu.menu);
+    window.addEventListener('pagehide', () => {
+        visuals.destroy();
+        menu.dispose();
+    });
     window.addEventListener('pageshow', (event) => {
-        if (event.persisted) menu.show('home');
+        if (event.persisted) {
+            menu.show('home');
+            visuals = mountMenuVisuals(menu.menu);
+        }
     });
 }

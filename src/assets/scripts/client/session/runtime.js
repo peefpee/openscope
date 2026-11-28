@@ -43,6 +43,7 @@ export default async function startRadar(session) {
         })
     };
     try {
+        if (session.stage) session.stage('Reading navigation data');
         await navData.load();
         if (bridge.suspended) return;
         for (const [key, value] of session.navRecords) navData.records.set(key, value);
@@ -52,6 +53,7 @@ export default async function startRadar(session) {
         document.getElementById('radar-workspace').replaceWith(...document.getElementById('radar-workspace').children);
         apply(session.settings);
         if (session.scopeOptions) applyScopeControls(session.scopeOptions);
+        if (session.stage) session.stage('Loading simulator assets');
         return new App($('body'), airport); // Controller instances belong to this browsing context.
     } catch (error) { session.fail(error); }
 }

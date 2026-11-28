@@ -55,7 +55,8 @@ app.get('/api/terrain', async (req, res) => {
         const maxLat = lat + dLat;
         const minLon = lon - dLon;
         const maxLon = lon + dLon;
-        const gridSize = 21;
+        const gridSize = Number(req.query.gridSize || 21);
+        if (![11, 21, 25].includes(gridSize)) return res.status(400).json({ error: 'Unsupported grid size' });
 
         const lats = [];
         const lons = [];

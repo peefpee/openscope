@@ -36,6 +36,8 @@ export default class MenuVisualController {
         this.menu.addEventListener('change', this._onInput);
         this.menu.addEventListener('click', this._onCardClick);
 
+        this._onPreview = () => this._syncClassicPreview();
+        this.menu.addEventListener('airport-preview', this._onPreview);
         this._setupObservers();
         this.syncAll();
     }
@@ -61,6 +63,7 @@ export default class MenuVisualController {
             this.backdrop = null;
         }
         if (this.menu) {
+            this.menu.removeEventListener('airport-preview', this._onPreview);
             this.menu.removeEventListener('input', this._onInput);
             this.menu.removeEventListener('change', this._onInput);
             this.menu.removeEventListener('click', this._onCardClick);
@@ -206,33 +209,28 @@ export default class MenuVisualController {
 
     _syncClassicPreview() {
         const svg = this.menu.querySelector('#session-classic-preview-svg');
-        const meta = this.menu.querySelector('#session-airport-meta');
-        if (!svg || !meta) return;
-
+        if (!svg) return;
         svg.querySelectorAll('.menu-preview-runway').forEach((el) => el.remove());
-        const text = meta.textContent || '';
-        const match = /Runways:\s*([^·]+)/i.exec(text);
-        if (!match) return;
-
-        const runways = match[1].split(',').map((s) => s.trim()).filter(Boolean);
-        runways.slice(0, 4).forEach((rwy, idx) => {
-            const headingNum = parseInt(rwy, 10);
-            if (Number.isNaN(headingNum)) return;
-            const rad = ((headingNum * 10 - 90) * Math.PI) / 180;
-            const offset = (idx - (runways.length - 1) / 2) * 10;
-            const perp = rad + Math.PI / 2;
-            const ox = Math.cos(perp) * offset;
-            const oy = Math.sin(perp) * offset;
-
+        const preview = this.menu.airportPreview;
+        if (!preview || !preview.runways.length || !preview.coordinates) return;
+        const [lat, lon] = preview.coordinates;
+        const longitudeScale = Math.cos(lat * Math.PI / 180);
+        const project = (point) => [(point[1] - lon) * longitudeScale, lat - point[0]];
+        const pairs = preview.runways.map((runway) => runway.thresholds.map(project));
+        const extent = Math.max(...[].concat(...pairs).map(([x, y]) => Math.max(Math.abs(x), Math.abs(y))));
+        if (!Number.isFinite(extent) || !extent) return;
+        const scale = 62 / extent;
+        pairs.forEach(([start, end], index) => {
+            const runway = preview.runways[index];
             const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
             line.setAttribute('class', 'menu-preview-runway');
-            line.setAttribute('x1', String(130 + ox - Math.cos(rad) * 34));
-            line.setAttribute('y1', String(80 + oy - Math.sin(rad) * 34));
-            line.setAttribute('x2', String(130 + ox + Math.cos(rad) * 34));
-            line.setAttribute('y2', String(80 + oy + Math.sin(rad) * 34));
-            line.setAttribute('stroke', '#91E8BC');
+            line.setAttribute('data-runway', runway.identifiers.join('/'));
+            line.setAttribute('x1', 130 + scale * start[0]);
+            line.setAttribute('y1', 80 + scale * start[1]);
+            line.setAttribute('x2', 130 + scale * end[0]);
+            line.setAttribute('y2', 80 + scale * end[1]);
+            line.setAttribute('stroke', runway.arrivalThreshold >= 0 ? '#91E8BC' : '#8FC6D3');
             line.setAttribute('stroke-width', '2.5');
-            line.setAttribute('stroke-linecap', 'round');
             svg.append(line);
         });
     }

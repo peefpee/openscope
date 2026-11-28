@@ -4,13 +4,35 @@ import DatImportView from '../ui/DatImportView';
 import navData from '../airport/dat/NavDataCache';
 import { GAME_OPTION_VALUES } from '../constants/gameOptionConstants';
 import {
-    controllerDraft, positions, prepareAirport, runwayModes
+    airportPreview, controllerDraft, positions, prepareAirport, runwayModes
 } from './configuration';
 import {
     preferences, resolveOption, savePreferences, finalizeScore
 } from './storage';
 
 const byId = (id) => document.getElementById(id);
+const actions = {
+    home: ['play', 'settings'],
+    modes: ['classic', 'custom', 'home'],
+    classic: ['configure', 'play'],
+    setup: ['start', 'selection'],
+    loading: ['cancel'],
+    pause: ['resume', 'settings', 'confirm'],
+    settings: ['settingsBack', 'fullscreen', 'testVoice', 'reset'],
+    reset: ['settings', 'resetYes'],
+    confirm: ['pause', 'exit']
+};
+const backPages = {
+    modes: ['home'],
+    classic: ['modes'],
+    custom: ['modes'],
+    setup: ['classic', 'custom'],
+    loading: ['setup'],
+    settings: ['home', 'pause'],
+    reset: ['settings'],
+    confirm: ['pause', 'home']
+};
+
 async function json(url) {
     const response = await fetch(url);
     if (!response.ok) throw new Error(`Could not load ${url}`);
@@ -28,12 +50,15 @@ export default class Menu {
         this.importer = new DatImportView($('body'), null, (airport) => this.configure(airport, 'custom'));
         const importer = byId('dat-import');
         importer.addEventListener('close', () => {
+            if (importer.open) return;
             this.importer.cancel();
             if (this.page === 'custom') this.show('modes', 'custom');
         });
         this.menu.addEventListener('click', (event) => {
             const button = event.target.closest('button[data-action]');
-            if (button) this.act(button.dataset.action).catch((error) => this.error(error));
+            if (button && !button.disabled && button.closest('[data-page]') === this.panel) {
+                this.act(button.dataset.action).catch((error) => this.error(error));
+            }
         });
         this.menu.addEventListener('cancel', (event) => {
             event.preventDefault();
@@ -54,17 +79,27 @@ export default class Menu {
         });
         byId('session-setup-traffic').onchange = () => this.updateMix();
         if (byId('session-airport-search')) byId('session-airport-search').oninput = () => this.renderClassicAirports();
-        byId('session-airport').onchange = () => this.updateClassicMeta().catch(() => {});
+        byId('session-airport').onchange = () => this.updateClassicMeta().catch((error) => this.error(error));
+        this.menu.addEventListener('input', () => this.publishSetup());
+        this.menu.addEventListener('change', () => this.publishSetup());
         this.buildSettings();
         this.show('home');
     }
 
     show(page, focusAction) {
+        const previous = this.page;
+        this.navigationId = (this.navigationId || 0) + 1;
         this.page = page;
+        this.menu.dataset.currentPage = page;
+        this.menu.dataset.pageDirection = 'none';
+        if (previous && previous !== page) {
+            this.menu.dataset.pageDirection = (backPages[previous] || []).includes(page) ? 'backward' : 'forward';
+        }
         const titles = {
             home: 'openScope',
             modes: 'Play',
             classic: 'Classic airports',
+            custom: 'Import airport',
             setup: this.airport && `${this.airport.icao.toUpperCase()} session`,
             pause: 'Paused',
             confirm: 'Exit session?',
@@ -74,11 +109,20 @@ export default class Menu {
         };
         byId('session-title').textContent = titles[page];
         byId('session-error').textContent = '';
-        this.menu.querySelectorAll('section').forEach((el) => { el.hidden = el.dataset.page !== page; });
+        this.menu.querySelectorAll('[data-page]').forEach((el) => {
+            el.hidden = el.dataset.page !== page;
+            if (el.hidden) el.setAttribute('inert', '');
+            else el.removeAttribute('inert');
+            if (el.hidden) el.style.setProperty('display', 'none', 'important');
+            else el.style.removeProperty('display');
+        });
         if (!this.menu.open) this.menu.showModal();
         const panel = this.menu.querySelector(`[data-page="${page}"]`);
+        this.panel = panel;
+        if (!panel) return;
         const focus = focusAction && panel.querySelector(`[data-action="${focusAction}"]`);
-        (focus || panel.querySelector('button:not(:disabled), select:not(:disabled)')).focus();
+        const target = focus || panel.querySelector('button:not(:disabled), select:not(:disabled)');
+        if (target) target.focus();
     }
 
     error(error) {
@@ -86,43 +130,27 @@ export default class Menu {
     }
 
     async act(action) {
+        if (!(actions[this.page] || []).includes(action)) return;
         switch (action) {
             case 'home': this.airport = null; this.show('home', 'play'); break;
             case 'play': this.show('modes', this.mode); break;
-            case 'classic': {
-                this.mode = 'classic';
-                this.show('classic');
-                const select = byId('session-airport');
-                if (!this.classicAirports.length) {
-                    const list = await json('assets/airports/airportLoadList.json');
-                    if (!this.classicAirports.length) {
-                        this.classicAirports = list.filter((a) => /^y/i.test(a.icao) && !a.disabled);
-                    }
-                }
-                if (this.page === 'classic') this.renderClassicAirports(select.value);
-                break;
-            }
+            case 'classic':
+            case 'custom': return this.openSelection(action);
             case 'configure': {
                 const icao = byId('session-airport').value;
                 if (!icao) throw new Error('Choose a bundled airport.');
-                this.generation += 1;
-                const token = this.generation;
+                const token = this.navigationId;
                 const data = await json(`assets/airports/${icao}.json`);
                 this.classicAirportDetails.set(icao, data);
-                if (this.page === 'classic' && token === this.generation) this.configure(data, 'classic');
+                if (token === this.navigationId && byId('session-airport').value === icao) this.configure(data, 'classic');
                 break;
             }
-            case 'custom':
-                this.mode = 'custom';
-                this.page = 'custom';
-                byId('dat-import').showModal();
-                this.importer.update();
-                break;
-            case 'selection': return this.act(this.mode);
+            case 'selection': return this.openSelection();
             case 'start': if (this.page === 'setup') this.start(); break;
             case 'cancel': this.dispose(); this.show('setup', 'start'); break;
             case 'resume':
                 if (this.page !== 'pause' || !this.frame) break;
+                this.menu.dataset.currentPage = 'playing';
                 this.page = 'playing';
                 this.menu.close();
                 this.frame.contentWindow.focus();
@@ -173,6 +201,22 @@ export default class Menu {
         }
     }
 
+    async openSelection(mode = this.mode) {
+        this.mode = mode;
+        this.show(mode);
+        if (mode === 'custom') {
+            byId('dat-import').showModal();
+            this.importer.update();
+            return;
+        }
+        const token = this.navigationId;
+        if (!this.classicAirports.length) {
+            const list = await json('assets/airports/airportLoadList.json');
+            this.classicAirports = list.filter((a) => /^y/i.test(a.icao) && !a.disabled);
+        }
+        if (token === this.navigationId) this.renderClassicAirports();
+    }
+
     configure(airport, mode) {
         const changedImport = mode === 'custom' && (this.importRevision !== this.importer.revision ||
             (this.airport && this.airport.centreSector !== airport.centreSector));
@@ -216,24 +260,56 @@ export default class Menu {
         this.modeOfDraft = mode;
         this.mode = mode;
         this.airport = airport;
+        this.previewSource = null;
         this.show('setup');
+        this.publishSetup();
     }
 
     updateMix() {
         byId('session-mix').disabled = !byId('session-arrivals').checked || !byId('session-departures').checked;
     }
 
-    start() {
-        const traffic = {
+    readControllers() {
+        return this.fields.map((row) => ({
+            callsign: row.callsign.value, frequency: row.frequency.value, radioName: row.radioName.value
+        }));
+    }
+
+    readTraffic() {
+        return {
             arrivals: byId('session-arrivals').checked,
             departures: byId('session-departures').checked,
             vfr: byId('session-vfr').checked,
             rate: Number(byId('session-rate').value),
             arrivalShare: byId('session-mix').disabled || !byId('session-mix').value ? null : Number(byId('session-mix').value)
         };
-        const fields = this.fields.map((row) => ({
-            callsign: row.callsign.value, frequency: row.frequency.value, radioName: row.radioName.value
-        }));
+    }
+
+    publishSetup() {
+        if (this.page !== 'setup') return;
+        const flow = this.runways[byId('session-runways').value];
+        if (this.previewSource !== this.airport || this.previewFlow !== flow || !this.menu.airportPreview) {
+            this.previewSource = this.airport;
+            this.previewFlow = flow;
+            const regions = navData.getCompatibleRecord('au-airspace', { icao: this.airport.icao });
+            this.publishPreview(airportPreview(this.airport, flow, regions));
+        }
+        const preview = this.menu.airportPreview;
+        const controllers = this.readControllers();
+        this.menu.sessionSummary = {
+            airport: preview.icao, flow: preview.activeFlow, controllers, traffic: this.readTraffic()
+        };
+        this.menu.dispatchEvent(new CustomEvent('session-summary', { detail: this.menu.sessionSummary }));
+    }
+
+    publishPreview(preview) {
+        this.menu.airportPreview = preview;
+        this.menu.dispatchEvent(new CustomEvent('airport-preview', { detail: preview }));
+    }
+
+    start() {
+        const traffic = this.readTraffic();
+        const fields = this.readControllers();
         const airport = prepareAirport(this.airport, traffic, this.runways[byId('session-runways').value], fields);
         const frame = document.createElement('iframe');
         this.generation += 1;
@@ -253,6 +329,12 @@ export default class Menu {
             navRecords: navData.records,
             scopeOptions: this.scopeOptions,
             fail,
+            stage: (label) => {
+                if (token !== this.generation || this.page !== 'loading') return;
+                this.menu.dataset.loadingStage = label;
+                const status = this.panel.querySelector('[role=status]');
+                if (status) status.textContent = label;
+            },
             record: {
                 id: `${Date.now()}-${Array.from(crypto.getRandomValues(new Uint32Array(3))).join('-')}`,
                 icao: airport.icao.toUpperCase(),
@@ -263,6 +345,7 @@ export default class Menu {
                 if (token !== this.generation || this.page !== 'loading') return;
                 clearTimeout(this.timeout);
                 frame.session.record.startedAt = new Date().toISOString();
+                this.menu.dataset.currentPage = 'playing';
                 this.page = 'playing';
                 this.menu.close();
                 frame.contentWindow.focus();
@@ -275,6 +358,7 @@ export default class Menu {
             }
         };
         this.show('loading');
+        frame.session.stage('Preparing airport');
         this.timeout = setTimeout(() => fail(new Error('Radar startup timed out. Retry the session.')), 45000);
         const url = new URL(window.location.href);
         url.searchParams.set('view', 'radar');
@@ -285,6 +369,7 @@ export default class Menu {
     dispose() {
         this.generation += 1;
         clearTimeout(this.timeout);
+        if (window.speechSynthesis) window.speechSynthesis.cancel();
         if (this.frame) {
             if (this.frame.session.runtime) this.frame.session.runtime.stop();
             this.frame.remove();
@@ -304,7 +389,7 @@ export default class Menu {
         select.replaceChildren();
         matches.forEach((a) => select.add(new Option(`${a.icao.toUpperCase()} · ${a.name}`, a.icao)));
         if (current && matches.some((a) => a.icao === current)) select.value = current;
-        this.updateClassicMeta().catch(() => {});
+        this.updateClassicMeta().catch((error) => this.error(error));
     }
 
     async updateClassicMeta() {
@@ -313,9 +398,11 @@ export default class Menu {
         const select = byId('session-airport');
         const icao = select.value;
         if (!icao) {
+            this.publishPreview(null);
             meta.textContent = this.classicAirports.length ? 'No matching airports.' : '';
             return;
         }
+        this.publishPreview(null);
         const summary = this.classicAirports.find((a) => a.icao === icao);
         const label = summary ? `${summary.icao.toUpperCase()} · ${summary.name}` : icao.toUpperCase();
         meta.textContent = label;
@@ -325,6 +412,7 @@ export default class Menu {
             this.classicAirportDetails.set(icao, data);
         }
         if (this.page !== 'classic' || select.value !== icao) return;
+        this.publishPreview(airportPreview(data));
         const runways = Array.isArray(data.runways) ? data.runways.map((r) => r.name.join('/')).join(', ') : '';
         const flow = data.arrivalRunway && data.departureRunway ?
             `${data.arrivalRunway} arr / ${data.departureRunway} dep` :

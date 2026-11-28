@@ -213,6 +213,7 @@ test('built shell recovers from a failed load and alternates ten independent rad
         const records = () => Object.keys(w.localStorage).filter((key) => key.startsWith('openscope.sessionScore.v1.'));
         await until(() => find('#session-menu')?.open, 'main menu');
         assert.equal(find('iframe'), null);
+        await until(() => find('#session-menu-radar-canvas').classList.contains('is-active'), 'animated menu');
         for (let i = 0; i < 10; i++) {
             const custom = i % 2 === 1;
             act('play');
@@ -229,6 +230,8 @@ test('built shell recovers from a failed load and alternates ten independent rad
             } else {
                 act('classic');
                 await until(() => find('#session-airport').value, 'airport list');
+                await until(() => find('#session-classic-preview-svg [data-runway]'), 'threshold geometry');
+                assert.ok(find('#session-menu').airportPreview.runways.length);
                 act('configure');
             }
             await until(() => !find('[data-page=setup]').hidden, 'setup');

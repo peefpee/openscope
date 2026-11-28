@@ -89,6 +89,7 @@ export default class App {
         // exist, if it doesn't, something has gone terribly wrong.
         $.when(airlineListPromise, aircraftListPromise, airportGuideListPromise)
             .done((airlineResponse, aircraftResponse, airportGuideResponse) => {
+                if (window.sessionBridge && window.sessionBridge.stage) window.sessionBridge.stage('Initializing radar');
                 this.setupChildrenHandler(
                     airportLoadList,
                     initialAirportIcao,

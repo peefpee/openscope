@@ -17,6 +17,7 @@
     "server": "npm run start",
     "start": "node public/assets/scripts/server/index.js",
     "test": "ava --concurrency=5",
+    "test:browser": "node --test test/e2e/sessionBrowser.cjs",
     "test:session": "node --test test/e2e/sessionBundle.cjs",
     "test:coverage": "nyc ava --concurrency=5",
     "validator": "validator -a",

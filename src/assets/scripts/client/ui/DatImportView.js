@@ -64,6 +64,17 @@ function renderDetails($results, data) {
 export default class DatImportView {
     constructor($root, onMsaChange, onPrepared) {
         this.$dialog = $root.find('#dat-import');
+        this.setStatus('idle');
+        this.$dialog.on('dragover.datImport drop.datImport', (event) => {
+            event.preventDefault();
+            if (event.type !== 'drop') return;
+            const zone = event.target.closest('[data-import-target]');
+            const id = zone ? zone.dataset.importTarget : 'dat-airport-file';
+            const file = event.originalEvent.dataTransfer.files[0];
+            if (!file || !this.$dialog.find('input[type=file]').toArray().some((input) => input.id === id)) return;
+            if (id === 'dat-terrain-file') this.importTerrainGeoJson(file);
+            else this.update(() => this.importFile(id, file));
+        });
         this.onMsaChange = onMsaChange;
         this.version = 0;
         this.revision = 0;
@@ -91,13 +102,16 @@ export default class DatImportView {
         this.$dialog.on('click.datImport', '.dat-terrain-clear', () => {
             if (this.scope) {
                 if (this._terrainAbort) this._terrainAbort.abort();
+                this._terrainAbort = null;
+                this.setStatus('ready');
                 this.scope.terrainGeoJson = null;
                 this.scope.has_terrain = false;
                 navData.clearTerrain(this.scope.icao);
                 this.$dialog.find('.dat-terrain-status').text(`Cleared cached terrain for ${this.scope.icao}.`);
             }
         });
-        this.$dialog.on('change.datImport', '#dat-terrain-coverage, #dat-terrain-provider, #dat-terrain-auto', () => {
+        const terrainControls = '#dat-terrain-coverage, #dat-terrain-provider, #dat-terrain-grid, #dat-terrain-auto';
+        this.$dialog.on('change.datImport', terrainControls, () => {
             if (this.scope) {
                 this._loadOrGenerateTerrain(this.scope, { force: false });
             }
@@ -121,11 +135,17 @@ export default class DatImportView {
         });
     }
 
+    setStatus(state, message = '') {
+        this.$dialog[0].dataset.importStatus = state;
+        this.$dialog[0].dispatchEvent(new CustomEvent('import-status', { detail: { state, message } }));
+    }
+
     // Serialize changes so a large fix file finishing late cannot replace a newer import.
     update(change) {
         this.version += 1;
         const { version } = this;
         if (change) this.revision += 1;
+        this.setStatus('reading');
         this.scope = null;
         this.$dialog.find('footer').prop('hidden', true);
         this.$dialog.find('.dat-status').text('Reading navigation data…');
@@ -136,6 +156,7 @@ export default class DatImportView {
             if (version === this.version) this.render();
         }).catch((error) => {
             if (version === this.version) {
+                this.setStatus('error', error.message);
                 this.$dialog.find('.dat-results').empty();
                 this.$dialog.find('.dat-status').text(error.message);
             }
@@ -148,6 +169,7 @@ export default class DatImportView {
         const { workflow } = this;
         return readFile(file).then((text) => {
             if (workflow !== this.workflow) return;
+            this.setStatus('parsing');
             const cycle = /data cycle (\d{4})/i.exec(text.slice(0, 1024));
             const record = { name: file.name, cycle: cycle ? cycle[1] : '' };
             if (id === 'dat-airspace-file') {
@@ -155,6 +177,7 @@ export default class DatImportView {
             }
             if (id === 'dat-airport-file') {
                 const data = parseAirportDat(text, file.name);
+                this.setStatus('validating');
                 const key = `airport/${data.icao}`;
                 if (!/^Y[A-Z0-9]{3}$/.test(data.icao) || !buildDatScope(data, resolveWaypoints(data))) {
                     throw new Error('Choose an Australian airport DAT with reciprocal runway thresholds.');
@@ -197,6 +220,7 @@ export default class DatImportView {
 
         for (const [key, selector] of Object.entries(sourceSelectors)) {
             const record = navData.records.get(key);
+            this.setStatus('parsing');
             const cycle = record && record.cycle ? ` · AIRAC ${record.cycle}` : '';
 
             this.$dialog.find(selector).text(record ? `In use: ${record.name}${cycle}` : '');
@@ -222,6 +246,7 @@ export default class DatImportView {
         const $status = this.$dialog.find('.dat-status');
         const $results = this.$dialog.find('.dat-results').empty();
         if (!this.airport) {
+            this.setStatus('idle');
             $status.text('Choose an airport to preview its scope.');
             return;
         }
@@ -264,6 +289,7 @@ export default class DatImportView {
         } else if (!this.scope) {
             status.push('A pair of reciprocal runway thresholds is required to open the scope.');
         }
+        this.setStatus(this.scope ? 'ready' : 'warning', status.join(' '));
         $status.text(status.join(' '));
         this.$dialog.find('.dat-terrain-section').prop('hidden', !this.scope);
         this.$dialog.find('footer').prop('hidden', !this.scope);
@@ -291,6 +317,9 @@ export default class DatImportView {
                 throw new Error('Invalid GeoJSON FeatureCollection.');
             }
             if (this.scope !== targetScope) return;
+            if (this._terrainAbort) this._terrainAbort.abort();
+            this._terrainAbort = null;
+            this.setStatus('ready');
             this.scope.terrainGeoJson = geojson;
             this.scope.has_terrain = geojson.features.length > 0;
             const coverageNm = this._resolveTerrainCoverageNm(this.scope);
@@ -304,6 +333,8 @@ export default class DatImportView {
             });
             this.$dialog.find('.dat-terrain-status').text(`Loaded manual terrain (${geojson.features.length} features).`);
         }).catch((err) => {
+            if (this.scope !== targetScope) return;
+            this.setStatus('warning', err.message);
             this.$dialog.find('.dat-terrain-status').text(`Terrain upload failed: ${err.message}`);
         });
     }
@@ -315,6 +346,7 @@ export default class DatImportView {
         const provider = this.$dialog.find('#dat-terrain-provider').val() || 'auto';
         const autoEnabled = this.$dialog.find('#dat-terrain-auto').prop('checked');
         const targetIcao = scope.icao;
+        const gridSize = Number(this.$dialog.find('#dat-terrain-grid').val()) || 21;
 
         if (this._terrainAbort) {
             this._terrainAbort.abort();
@@ -323,15 +355,26 @@ export default class DatImportView {
 
         if (!force) {
             $terrainStatus.text(`Checking cached terrain for ${targetIcao}...`);
-            const cached = navData.getTerrain(targetIcao, { coverageNm });
+            const cached = navData.getTerrain(targetIcao, {
+                coverageNm,
+                coordinates: scope.position,
+                provider,
+                resolution: `${gridSize}x${gridSize}`,
+                contourIntervalFt: 1000,
+                datasetVersion: '1'
+            });
             if (cached && cached.geojson) {
                 scope.terrainGeoJson = cached.geojson;
-                scope.has_terrain = true;
+                scope.has_terrain = cached.geojson.features.length > 0;
+                this.setStatus('ready');
                 $terrainStatus.text(`Terrain ready (cached): ${coverageNm} NM coverage.`);
                 return;
             }
         }
 
+        scope.terrainGeoJson = null;
+        scope.has_terrain = false;
+        this.setStatus('ready');
         if (!autoEnabled && !force) {
             $terrainStatus.text('Automatic terrain generation disabled.');
             return;
@@ -341,12 +384,14 @@ export default class DatImportView {
         this._terrainAbort = controller;
         const { version } = this;
 
+        this.setStatus('generating-terrain');
         fetchAndGenerateTerrain({
             icao: targetIcao,
             lat: scope.position[0],
             lon: scope.position[1],
             coverageNm,
             contourIntervalFt: 1000,
+            gridSize,
             provider,
             signal: controller ? controller.signal : null,
             onProgress: (msg) => {
@@ -355,7 +400,7 @@ export default class DatImportView {
                 }
             }
         }).then((result) => {
-            if (version !== this.version || !this.scope || this.scope.icao !== targetIcao) return;
+            if (version !== this.version || controller !== this._terrainAbort || this.scope !== scope) return;
             scope.terrainGeoJson = result.geojson;
             scope.has_terrain = true;
             navData.saveTerrain({
@@ -367,10 +412,12 @@ export default class DatImportView {
                 attribution: result.attribution,
                 geojson: result.geojson
             });
+            this.setStatus('ready');
             $terrainStatus.text(`Terrain ready: ${coverageNm} NM coverage (${result.attribution}).`);
         }).catch((err) => {
             if (err && err.name === 'AbortError') return;
-            if (version !== this.version || !this.scope || this.scope.icao !== targetIcao) return;
+            if (version !== this.version || controller !== this._terrainAbort || this.scope !== scope) return;
+            this.setStatus('warning', err.message);
             $terrainStatus.text(`Terrain unavailable: ${err.message}. You can still open the scope without terrain.`);
         });
     }

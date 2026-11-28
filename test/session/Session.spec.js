@@ -3,7 +3,7 @@ import test from 'ava';
 import $ from 'jquery';
 import sinon from 'sinon';
 import airport from '../../assets/airports/yssy.json';
-import { controllerDraft, positions, prepareAirport } from '../../src/assets/scripts/client/session/configuration';
+import { airportPreview, controllerDraft, positions, prepareAirport } from '../../src/assets/scripts/client/session/configuration';
 import { finalizeScore, preferences, resolveOption, savePreferences } from '../../src/assets/scripts/client/session/storage';
 import Menu from '../../src/assets/scripts/client/session/Menu';
 import { GAME_OPTION_VALUES } from '../../src/assets/scripts/client/constants/gameOptionConstants';
@@ -340,4 +340,14 @@ test.serial('EXIT-02: Menu double act("exit") and double act("resume") do not th
         if (hasOwnDoc) global.document = prevDoc;
         else delete global.document;
     }
+});
+
+test('preview exposes ordered numeric runway ends and active flows independently of the source', (t) => {
+    const view = airportPreview(airport, { arrival: '34L', departure: '34R' });
+    const pair = view.runways.find((runway) => runway.arrivalThreshold >= 0);
+    t.is(pair.identifiers[pair.arrivalThreshold], '34L');
+    t.true(pair.thresholds.every((point) => point.every(Number.isFinite)));
+    t.true(Object.isFrozen(view.runways[0].thresholds));
+    t.false(Object.isFrozen(airport.runways[0].end));
+    t.is(view.controllers.centre.length, 1);
 });
