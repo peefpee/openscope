@@ -108,20 +108,59 @@
         </section>
 
         <section data-page="classic" hidden>
-            <div class="menu-classic-layout">
-                <div class="menu-card menu-classic-list-pane">
-                    <label class="menu-field menu-search-field" for="session-airport-search">
-                        <span>Filter airports</span>
-                        <input id="session-airport-search" type="search" placeholder="Search ICAO or name">
-                    </label>
-                    <div id="session-airport-cards" class="menu-airport-cards" role="listbox" aria-label="Bundled airports"></div>
-                    <label class="menu-field menu-classic-select-wrap" for="session-airport">
+            <div class="menu-classic-toolbar">
+                <label class="menu-field menu-search-field" for="session-airport-search">
+                    <span class="sr-only">Filter airports</span>
+                    <input id="session-airport-search" type="search" placeholder="Search ICAO or airport name…">
+                </label>
+                <div class="menu-filter-group" role="group" aria-label="Airport source filter">
+                    <button type="button" class="menu-filter-btn is-active" data-filter="all" aria-pressed="true">All</button>
+                    <button type="button" class="menu-filter-btn" data-filter="bundled" aria-pressed="false">Bundled</button>
+                    <button type="button" class="menu-filter-btn" data-filter="saved" aria-pressed="false">Saved</button>
+                </div>
+                <button type="button" class="menu-btn-ghost menu-globe-reset" data-action="resetGlobe">Reset to Australia</button>
+            </div>
+
+            <div class="menu-classic-layout menu-classic-layout--globe">
+                <div class="menu-card menu-globe-stage">
+                    <div id="session-airport-globe" class="menu-globe" aria-label="Interactive 3D airport globe">
+                        <canvas class="globe-canvas" aria-hidden="true"></canvas>
+                        <div class="globe-markers"></div>
+                        <div class="globe-fallback">
+                            <div id="session-airport-cards" class="menu-airport-cards" role="listbox" aria-label="Available airports"></div>
+                        </div>
+                    </div>
+                    <p id="session-globe-empty" class="menu-globe-empty" hidden>No airports match the current filter.</p>
+                    <div class="menu-globe-legend" aria-label="Marker legend">
+                        <span class="legend-item"><i class="legend-dot legend-dot--bundled"></i>Bundled</span>
+                        <span class="legend-item"><i class="legend-dot legend-dot--imported"></i>Saved imported</span>
+                        <span class="legend-item"><i class="legend-dot legend-dot--both"></i>Both sources</span>
+                        <span class="legend-item"><i class="legend-dot legend-dot--selected"></i>Selected</span>
+                    </div>
+                    <label class="menu-field menu-classic-select-wrap is-enhanced" for="session-airport">
                         <span>Airport</span>
-                        <select id="session-airport"></select>
+                        <select id="session-airport" tabindex="-1"></select>
                     </label>
                 </div>
 
                 <div class="menu-card menu-classic-preview-pane">
+                    <div class="menu-classic-selected-head">
+                        <div>
+                            <p class="menu-eyebrow">SELECTED SECTOR</p>
+                            <h2 id="session-selected-icao" class="menu-selected-icao">—</h2>
+                            <p id="session-selected-name" class="menu-selected-name">Select an airport on the globe</p>
+                        </div>
+                        <span id="session-selected-source-badge" class="menu-source-badge" hidden></span>
+                    </div>
+
+                    <div id="session-airport-source-wrap" class="menu-source-switcher" hidden>
+                        <span class="menu-source-switcher__label">Data source</span>
+                        <div class="menu-source-switcher__btns">
+                            <button type="button" class="menu-filter-btn is-active" data-source="bundled">Bundled</button>
+                            <button type="button" class="menu-filter-btn" data-source="imported">Saved import</button>
+                        </div>
+                    </div>
+
                     <div class="menu-radar-preview" aria-hidden="true">
                         <svg id="session-classic-preview-svg" viewBox="0 0 260 160" fill="none">
                             <circle cx="130" cy="80" r="64" stroke="#8FC6D3" stroke-opacity="0.16" stroke-dasharray="3 3"/>
@@ -131,12 +170,27 @@
                             <line x1="62" y1="80" x2="198" y2="80" stroke="#8FC6D3" stroke-opacity="0.12"/>
                         </svg>
                     </div>
-                    <div class="menu-classic-meta-box">
-                        <p class="menu-eyebrow">SELECTED SECTOR</p>
-                        <p id="session-airport-meta" class="menu-classic-meta" role="status"></p>
+
+                    <dl id="session-airport-details" class="menu-airport-details">
+                        <div><dt>Elevation</dt><dd data-detail="elevation">—</dd></div>
+                        <div><dt>Saved status</dt><dd data-detail="saved">—</dd></div>
+                        <div><dt>Nav data</dt><dd data-detail="navdata">—</dd></div>
+                        <div><dt>Airspace / Terrain</dt><dd data-detail="layers">—</dd></div>
+                    </dl>
+
+                    <p id="session-airport-meta" class="menu-classic-meta" role="status"></p>
+
+                    <div id="session-unsave-confirm" class="menu-unsave-confirm" hidden>
+                        <p>Remove <strong id="session-unsave-icao"></strong> from Classic? Shared navigation, MSA, and terrain files are preserved.</p>
+                        <div class="menu-unsave-confirm__actions">
+                            <button type="button" class="menu-btn-secondary" data-action="unsaveCancel">Cancel</button>
+                            <button type="button" class="menu-btn-danger" data-action="unsaveConfirm">Confirm unsave</button>
+                        </div>
                     </div>
+
                     <div class="menu-page-actions">
                         <button type="button" class="menu-btn-primary" data-action="configure">Configure session →</button>
+                        <button type="button" class="menu-btn-danger" data-action="unsave" hidden>Unsave airport</button>
                         <button type="button" class="menu-btn-ghost" data-action="play">← Back</button>
                     </div>
                 </div>

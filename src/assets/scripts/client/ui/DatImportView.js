@@ -6,6 +6,7 @@ import parseMsaDat from '../airport/dat/parseMsaDat';
 import { parseAirportDat } from '../airport/dat/parseAirportDat';
 import { buildDatScope, resolveWaypoints } from '../airport/dat/buildDatScope';
 import { fetchAndGenerateTerrain } from '../airport/dat/terrainGenerator';
+import { markImportedAirportSaved } from '../session/airportCatalogue';
 
 function readFile(file) {
     return new Promise((resolve, reject) => {
@@ -127,8 +128,24 @@ export default class DatImportView {
         });
         this.$dialog.on('click.datImport', '.dat-open', () => {
             if (this.scope) {
-                this.scope.spokenAirportName = this.$dialog.find('#dat-spoken-name').val().trim();
-                this.scope.centreSector = this.$dialog.find('#dat-centre').val();
+                const spokenName = this.$dialog.find('#dat-spoken-name').val().trim();
+                const centreSector = this.$dialog.find('#dat-centre').val();
+                this.scope.spokenAirportName = spokenName;
+                this.scope.centreSector = centreSector;
+                if (this.airport && this.airport.key) {
+                    this.airport.spokenAirportName = spokenName;
+                    this.airport.selectedRunway = this.selectedRunway || this.scope.arrivalRunway;
+                    this.airport.controllerSettings = {
+                        ...(this.airport.controllerSettings || {}),
+                        centreSector
+                    };
+                    navData.save(this.airport).then(() => {
+                        if (!navData.memoryOnly.has(this.airport.key) && navData.db) {
+                            markImportedAirportSaved(this.scope.icao);
+                        }
+                        this.$dialog[0].dispatchEvent(new CustomEvent('catalogue-updated', { bubbles: true }));
+                    });
+                }
                 onPrepared(this.scope);
                 this.$dialog[0].close();
             }
@@ -184,9 +201,18 @@ export default class DatImportView {
                 }
                 this.selectedRunway = null;
                 this.airport = {
-                    ...navData.records.get(key), ...record, key, text
+                    ...navData.records.get(key),
+                    ...record,
+                    key,
+                    text,
+                    importedAt: new Date().toISOString()
                 };
-                return navData.save(this.airport);
+                return navData.save(this.airport).then(() => {
+                    if (!navData.memoryOnly.has(key) && navData.db) {
+                        markImportedAirportSaved(data.icao);
+                    }
+                    this.$dialog[0].dispatchEvent(new CustomEvent('catalogue-updated', { bubbles: true }));
+                });
             } else if (id === 'dat-msa-file') {
                 return navData.save({ ...record, key: 'msa', airports: parseMsaDat(text) }).then(this.onMsaChange);
             }

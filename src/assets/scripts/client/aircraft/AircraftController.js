@@ -18,6 +18,7 @@ import GameController, { GAME_EVENTS } from '../game/GameController';
 import { vfrEntry } from './Pilot/VfrArrival';
 import CommandParser from '../commands/parsers/CommandParser';
 import { airlineNameAndFleetHelper } from '../airline/airlineHelpers';
+import StaticPositionModel from '../base/StaticPositionModel';
 import { convertStaticPositionToDynamic } from '../base/staticPositionToDynamicPositionHelper';
 import { abs } from '../math/core';
 import { distance2d } from '../math/distance';
@@ -26,7 +27,13 @@ import { generateTransponderCode, isDiscreteTransponderCode, isValidTransponderC
 import { km } from '../utilities/unitConverters';
 import { isEmptyOrNotArray } from '../utilities/validatorUtilities';
 import { FLIGHT_CATEGORY, FLIGHT_PHASE } from '../constants/aircraftConstants';
+import { CONTROLLER_TYPE, HANDOFF_STATE, isAustralianAirport } from '../constants/controllerConstants';
 import { EVENT, AIRCRAFT_EVENT } from '../constants/eventNames';
+import {
+    isPointInsideApproachAirspace,
+    resolveApproachCeiling,
+    resolveRouteArrivalEntry
+} from '../trafficGenerator/ArrivalEntryResolver';
 import { GAME_OPTION_NAMES } from '../constants/gameOptionConstants';
 import { INVALID_INDEX } from '../constants/globalConstants';
 
@@ -247,6 +254,10 @@ export default class AircraftController {
     createAircraftWithSpawnPatternModel = (spawnPatternModel) => {
         const initializationProps = this._buildAircraftProps(spawnPatternModel);
 
+        if (!initializationProps) {
+            return;
+        }
+
         this._createAircraftWithInitializationProps(initializationProps);
     }
 
@@ -273,7 +284,15 @@ export default class AircraftController {
         for (let i = 0; i < spawnPatternModel.preSpawnAircraftList.length; i++) {
             const preSpawnHeadingAndPosition = spawnPatternModel.preSpawnAircraftList[i];
             const baseAircraftProps = this._buildAircraftProps(spawnPatternModel, isPreSpawn);
+
+            if (!baseAircraftProps) {
+                continue;
+            }
+
             const initializationProps = Object.assign({}, baseAircraftProps, preSpawnHeadingAndPosition);
+            if (initializationProps.positionModel && (initializationProps.positionModel instanceof StaticPositionModel)) {
+                initializationProps.positionModel = convertStaticPositionToDynamic(initializationProps.positionModel);
+            }
 
             this._createAircraftWithInitializationProps(initializationProps);
         }
@@ -609,10 +628,12 @@ export default class AircraftController {
             return;
         }
         const props = this._buildAircraftProps(pattern, false, 'vh/lightGA');
+        if (!props) return;
         const entry = vfrEntry(airport, props.model.speed.cruise, props.model.bankAngle, this.aircraft.list);
         if (!entry) return;
         this._createAircraftWithInitializationProps({
             ...props,
+            controllerState: null,
             rules: 'vfr',
             orbit: entry.orbit,
             positionModel: entry.position,
@@ -692,20 +713,63 @@ export default class AircraftController {
         // since we already have it, it makes little sense to look for it again in the controller
         const flightNumber = this._airlineController.generateFlightNumberWithAirlineModel(airlineModel);
         const aircraftTypeDefinition = this._getRandomAircraftTypeDefinitionForAirlineId(airlineId, airlineModel);
-        // TODO: this may need to be reworked.
-        // if we are building a preSpawn aircraft, cap the altitude at 18000 so aircraft that spawn closer to
-        // airspace can safely enter controlled airspace properly
-        let { altitude } = spawnPatternModel;
+        const airport = AirportController.airport_get();
+        const isAustralianArrival = Boolean(
+            airport &&
+            isAustralianAirport(airport.icao) &&
+            spawnPatternModel.category === FLIGHT_CATEGORY.ARRIVAL
+        );
+        const existingPositions = isAustralianArrival
+            ? this.aircraft.list.filter((ac) => ac.isAirborne()).map((ac) => ac.relativePosition)
+            : [];
 
-        if (isPreSpawn && spawnPatternModel.category === FLIGHT_CATEGORY.ARRIVAL) {
-            altitude = Math.min(18000, altitude);
-        }
-
-        const entry = !isPreSpawn && spawnPatternModel.vectors && spawnPatternModel.isArrival() ?
-            spawnPatternModel.createVectorArrivalEntry() : {
+        let entry;
+        if (!isPreSpawn && spawnPatternModel.vectors && spawnPatternModel.isArrival()) {
+            entry = spawnPatternModel.createVectorArrivalEntry(existingPositions);
+            if (!entry) {
+                return null;
+            }
+        } else if (!isPreSpawn && isAustralianArrival && spawnPatternModel._routeModel) {
+            entry = resolveRouteArrivalEntry(airport, spawnPatternModel._routeModel, {
+                aircraftModel: aircraftTypeDefinition,
+                existingPositions
+            }) || {
                 heading: spawnPatternModel.heading,
                 positionModel: convertStaticPositionToDynamic(spawnPatternModel.positionModel)
             };
+        } else {
+            entry = {
+                heading: spawnPatternModel.heading,
+                positionModel: convertStaticPositionToDynamic(spawnPatternModel.positionModel)
+            };
+        }
+
+        if (entry && entry.positionModel && (entry.positionModel instanceof StaticPositionModel)) {
+            entry = {
+                ...entry,
+                positionModel: convertStaticPositionToDynamic(entry.positionModel)
+            };
+        }
+
+        let { altitude } = spawnPatternModel;
+        let controllerState;
+        if (isAustralianArrival) {
+            altitude = resolveApproachCeiling(airport, {
+                aircraftModel: aircraftTypeDefinition,
+                relativePosition: entry.positionModel && entry.positionModel.relativePosition
+            });
+            const config = airport.controllerConfig;
+            const centreCfg = config && Array.isArray(config.centre) ? config.centre[0] : null;
+            if (centreCfg && entry.positionModel && !isPointInsideApproachAirspace(airport, entry.positionModel.relativePosition)) {
+                controllerState = {
+                    currentController: CONTROLLER_TYPE.CTR,
+                    currentFrequency: centreCfg.frequency,
+                    handoffState: HANDOFF_STATE.NONE
+                };
+            }
+        } else if (isPreSpawn && spawnPatternModel.category === FLIGHT_CATEGORY.ARRIVAL) {
+            altitude = Math.min(18000, altitude);
+        }
         const transponderCode = this._generateUniqueTransponderCode(AirportController.airport_get().icao);
 
         return {
@@ -720,6 +784,7 @@ export default class AircraftController {
             airlineCallsign: airlineModel.radioName,
             speed: spawnPatternModel.speed,
             ...entry,
+            ...(controllerState ? { controllerState } : {}),
             vectors: spawnPatternModel.vectors,
             icao: aircraftTypeDefinition.icao,
             model: aircraftTypeDefinition,

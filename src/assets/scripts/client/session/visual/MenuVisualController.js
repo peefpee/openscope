@@ -1,4 +1,5 @@
 import RadarBackdrop from './RadarBackdrop';
+import AirportGlobe from './AirportGlobe';
 
 const PAGE_DEPTH = {
     home: 0,
@@ -21,6 +22,7 @@ export default class MenuVisualController {
         this.menu = menuEl;
         this.lastPage = this._activePage();
         this.backdrop = null;
+        this.globe = null;
         this.observers = [];
 
         if (!this.menu) return;
@@ -32,9 +34,15 @@ export default class MenuVisualController {
 
         this._onInput = (event) => this._handleInput(event);
         this._onCardClick = (event) => this._handleCardClick(event);
+        this._onCatalogueRendered = (event) => this._handleCatalogueRendered(event);
+        this._onGlobeReset = () => {
+            if (this.globe) this.globe.resetView();
+        };
         this.menu.addEventListener('input', this._onInput);
         this.menu.addEventListener('change', this._onInput);
         this.menu.addEventListener('click', this._onCardClick);
+        this.menu.addEventListener('catalogue-rendered', this._onCatalogueRendered);
+        this.menu.addEventListener('globe-reset', this._onGlobeReset);
 
         this._onPreview = () => this._syncClassicPreview();
         this.menu.addEventListener('airport-preview', this._onPreview);
@@ -62,8 +70,14 @@ export default class MenuVisualController {
             this.backdrop.destroy();
             this.backdrop = null;
         }
+        if (this.globe) {
+            this.globe.destroy();
+            this.globe = null;
+        }
         if (this.menu) {
             this.menu.removeEventListener('airport-preview', this._onPreview);
+            this.menu.removeEventListener('catalogue-rendered', this._onCatalogueRendered);
+            this.menu.removeEventListener('globe-reset', this._onGlobeReset);
             this.menu.removeEventListener('input', this._onInput);
             this.menu.removeEventListener('change', this._onInput);
             this.menu.removeEventListener('click', this._onCardClick);
@@ -142,13 +156,60 @@ export default class MenuVisualController {
     }
 
     _syncBackdrop() {
-        if (!this.backdrop || !this.menu) return;
-        const shouldRun = Boolean(this.menu.open) && !this.menu.classList.contains('in-session');
-        if (shouldRun && !this.backdrop.running) {
-            this.backdrop.start();
-        } else if (!shouldRun && this.backdrop.running) {
-            this.backdrop.stop();
+        if (!this.menu) return;
+        const isOpen = Boolean(this.menu.open);
+        const inSession = this.menu.classList.contains('in-session');
+        const activePage = this._activePage();
+
+        if (this.backdrop) {
+            const shouldRun = isOpen && !inSession;
+            if (shouldRun && !this.backdrop.running) {
+                this.backdrop.start();
+            } else if (!shouldRun && this.backdrop.running) {
+                this.backdrop.stop();
+            }
         }
+
+        const shouldRunGlobe = isOpen && !inSession && activePage === 'classic';
+        if (shouldRunGlobe && !this.globe) {
+            const container = this.menu.querySelector('#session-airport-globe');
+            if (container) {
+                this.globe = new AirportGlobe(container, {
+                    onSelect: (icao) => this._selectAirport(icao, true)
+                });
+                if (this._lastCatalogueDetail) {
+                    this.globe.setAirports(this._lastCatalogueDetail.entries, this._lastCatalogueDetail.selectedIcao);
+                }
+            }
+        }
+        if (this.globe) {
+            this.globe.setActive(shouldRunGlobe);
+        }
+    }
+
+    _selectAirport(icao, animate = false) {
+        const select = this.menu.querySelector('#session-airport');
+        if (!select) return;
+        const target = String(icao || '').toLowerCase();
+        if (Array.from(select.options).some((opt) => opt.value.toLowerCase() === target)) {
+            select.value = target;
+            select.dispatchEvent(new Event('change', { bubbles: true }));
+            this._syncAirportCards();
+            if (this.globe) this.globe.setSelected(target.toUpperCase(), animate);
+        }
+    }
+
+    _handleCatalogueRendered(event) {
+        const detail = event && event.detail;
+        if (!detail) return;
+        this._lastCatalogueDetail = detail;
+        if (this.globe) {
+            this.globe.setAirports(detail.entries, detail.selectedIcao);
+            if (detail.query && detail.entries.length === 1 && Array.isArray(detail.entries[0].coordinates)) {
+                this.globe.focusCoordinates(detail.entries[0].coordinates[0], detail.entries[0].coordinates[1]);
+            }
+        }
+        this._syncAirportCards();
     }
 
     _syncDirection() {

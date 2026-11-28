@@ -85,10 +85,10 @@ test.serial('imports a runway-only Hobart scenario with controllable arrivals an
         SpawnPatternCollection.init(scope);
         const [arrival, departure] = SpawnPatternCollection.spawnPatternModels;
         t.deepEqual(SpawnPatternCollection.getDepartureModelsForPreSpawn(), [departure]);
-        t.is(arrival.preSpawnAircraftList.length, 1);
+        t.true(arrival.preSpawnAircraftList.length >= 1);
         t.is(scope.routeLabels['_SIMIN _SIMFINAL'], 'Arrival vectors');
         for (const aircraft of arrival.preSpawnAircraftList) {
-            t.true(model.isPointWithinAirspace(aircraft.positionModel.relativePosition, aircraft.altitude));
+            t.false(model.isPointWithinAirspace(aircraft.positionModel.relativePosition, aircraft.altitude));
         }
         // Entries always point toward the next filed fix, including the startup arrival.
         const originalRandom = Math.random;
@@ -98,7 +98,7 @@ test.serial('imports a runway-only Hobart scenario with controllable arrivals an
                 const { positionModel, heading, nextFix } = arrival.createVectorArrivalEntry();
                 const target = NavigationLibrary.findFixByName(nextFix).positionModel;
                 t.is(heading, positionModel.bearingToPosition(target));
-                t.true(model.isPointWithinAirspace(positionModel.relativePosition, 8000));
+                t.false(model.isPointWithinAirspace(positionModel.relativePosition, 8000));
                 return heading;
             });
             t.is(new Set(headings).size, 4);
@@ -156,7 +156,7 @@ test.serial('builds flyable runway and en-route transitions, including restricti
         const star = NavigationLibrary.getProcedure('TEST2');
         const arrival = star.getWaypointModelsForEntryAndExit('ENTRY', 'YMML09L');
         t.deepEqual(arrival.map((fix) => fix.name), ['ENTRY', 'MID', 'FINAL']);
-        t.is(SpawnPatternCollection.spawnPatternModels[0].preSpawnAircraftList.length, 1);
+        t.true(SpawnPatternCollection.spawnPatternModels[0].preSpawnAircraftList.length >= 1);
     } finally {
         SpawnPatternCollection.reset();
         NavigationLibrary.reset();

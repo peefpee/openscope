@@ -7,6 +7,11 @@ import {
     airportPreview, controllerDraft, positions, prepareAirport, runwayModes
 } from './configuration';
 import {
+    buildAirportCatalogue,
+    buildAirportFromImportedRecord,
+    unsaveImportedAirport
+} from './airportCatalogue';
+import {
     preferences, resolveOption, savePreferences, finalizeScore
 } from './storage';
 
@@ -14,7 +19,7 @@ const byId = (id) => document.getElementById(id);
 const actions = {
     home: ['play', 'settings'],
     modes: ['classic', 'custom', 'home'],
-    classic: ['configure', 'play'],
+    classic: ['configure', 'play', 'resetGlobe', 'unsave', 'unsaveConfirm', 'unsaveCancel'],
     setup: ['start', 'selection'],
     loading: ['cancel'],
     pause: ['resume', 'settings', 'confirm'],
@@ -47,6 +52,9 @@ export default class Menu {
         this.scopeOptions = null;
         this.classicAirports = [];
         this.classicAirportDetails = new Map();
+        this.catalogue = [];
+        this.classicFilter = 'all';
+        this.preferredSources = new Map();
         this.importer = new DatImportView($('body'), null, (airport) => this.configure(airport, 'custom'));
         const importer = byId('dat-import');
         importer.addEventListener('close', () => {
@@ -54,7 +62,31 @@ export default class Menu {
             this.importer.cancel();
             if (this.page === 'custom') this.show('modes', 'custom');
         });
+        importer.addEventListener('catalogue-updated', () => {
+            this.refreshCatalogue();
+            if (this.page === 'classic') this.renderClassicAirports();
+        });
         this.menu.addEventListener('click', (event) => {
+            const filterBtn = event.target.closest('button[data-filter]');
+            if (filterBtn && this.page === 'classic') {
+                this.classicFilter = filterBtn.dataset.filter || 'all';
+                this.menu.querySelectorAll('button[data-filter]').forEach((btn) => {
+                    const active = btn === filterBtn;
+                    btn.classList.toggle('is-active', active);
+                    btn.setAttribute('aria-pressed', active ? 'true' : 'false');
+                });
+                this.renderClassicAirports();
+                return;
+            }
+            const sourceBtn = event.target.closest('button[data-source]');
+            if (sourceBtn && this.page === 'classic') {
+                const icao = byId('session-airport').value.toUpperCase();
+                if (icao) {
+                    this.preferredSources.set(icao, sourceBtn.dataset.source);
+                    this.updateClassicMeta().catch((error) => this.error(error));
+                }
+                return;
+            }
             const button = event.target.closest('button[data-action]');
             if (button && !button.disabled && button.closest('[data-page]') === this.panel) {
                 this.act(button.dataset.action).catch((error) => this.error(error));
@@ -138,11 +170,43 @@ export default class Menu {
             case 'custom': return this.openSelection(action);
             case 'configure': {
                 const icao = byId('session-airport').value;
-                if (!icao) throw new Error('Choose a bundled airport.');
+                if (!icao) throw new Error('Choose an airport.');
                 const token = this.navigationId;
-                const data = await json(`assets/airports/${icao}.json`);
-                this.classicAirportDetails.set(icao, data);
-                if (token === this.navigationId && byId('session-airport').value === icao) this.configure(data, 'classic');
+                const data = await this.loadClassicAirportData(icao);
+                if (token === this.navigationId && byId('session-airport').value.toLowerCase() === icao.toLowerCase()) {
+                    this.configure(data, 'classic');
+                }
+                break;
+            }
+            case 'resetGlobe':
+                this.menu.dispatchEvent(new CustomEvent('globe-reset'));
+                break;
+            case 'unsave': {
+                const icao = byId('session-airport').value.toUpperCase();
+                const box = byId('session-unsave-confirm');
+                const label = byId('session-unsave-icao');
+                if (icao && box) {
+                    if (label) label.textContent = icao;
+                    box.hidden = false;
+                }
+                break;
+            }
+            case 'unsaveCancel': {
+                const box = byId('session-unsave-confirm');
+                if (box) box.hidden = true;
+                break;
+            }
+            case 'unsaveConfirm': {
+                const select = byId('session-airport');
+                const icao = select ? select.value.toUpperCase() : '';
+                if (icao) {
+                    unsaveImportedAirport(icao);
+                    this.preferredSources.delete(icao);
+                    const box = byId('session-unsave-confirm');
+                    if (box) box.hidden = true;
+                    this.refreshCatalogue();
+                    this.renderClassicAirports();
+                }
                 break;
             }
             case 'selection': return this.openSelection();
@@ -210,11 +274,51 @@ export default class Menu {
             return;
         }
         const token = this.navigationId;
+        await navData.load();
         if (!this.classicAirports.length) {
             const list = await json('assets/airports/airportLoadList.json');
             this.classicAirports = list.filter((a) => /^y/i.test(a.icao) && !a.disabled);
+            await Promise.all(this.classicAirports.map(async (summary) => {
+                const key = summary.icao.toLowerCase();
+                if (!this.classicAirportDetails.has(key)) {
+                    try {
+                        const details = await json(`assets/airports/${key}.json`);
+                        this.classicAirportDetails.set(key, details);
+                    } catch (e) { /* ignore individual fetch error */ }
+                }
+            }));
         }
+        this.refreshCatalogue();
         if (token === this.navigationId) this.renderClassicAirports();
+    }
+
+    refreshCatalogue() {
+        this.catalogue = buildAirportCatalogue(
+            this.classicAirports,
+            this.classicAirportDetails,
+            navData
+        );
+        return this.catalogue;
+    }
+
+    async loadClassicAirportData(icao) {
+        const code = String(icao || '').trim().toUpperCase();
+        const entry = this.catalogue.find((a) => a.icao === code);
+        const preferred = this.preferredSources.get(code) || (entry && entry.hasBundled ? 'bundled' : 'imported');
+
+        if (preferred === 'imported' && entry && entry.importedRecord) {
+            const scope = buildAirportFromImportedRecord(entry.importedRecord, navData);
+            if (!scope) throw new Error(`Could not rebuild imported airport ${code}.`);
+            return scope;
+        }
+
+        const key = code.toLowerCase();
+        let data = this.classicAirportDetails.get(key);
+        if (!data) {
+            data = await json(`assets/airports/${key}.json`);
+            this.classicAirportDetails.set(key, data);
+        }
+        return data;
     }
 
     configure(airport, mode) {
@@ -382,13 +486,39 @@ export default class Menu {
         const select = byId('session-airport');
         const searchInput = byId('session-airport-search');
         const query = searchInput ? searchInput.value.trim().toLowerCase() : '';
-        const current = preferredIcao || select.value;
-        const matches = this.classicAirports.filter((a) => !query ||
-            a.icao.toLowerCase().includes(query) ||
-            String(a.name || '').toLowerCase().includes(query));
+        const current = (preferredIcao || select.value || '').toLowerCase();
+        if (!this.catalogue.length && (this.classicAirports.length || navData.records.size)) {
+            this.refreshCatalogue();
+        }
+        const matches = this.catalogue.filter((a) => {
+            if (this.classicFilter === 'bundled' && !a.hasBundled) return false;
+            if (this.classicFilter === 'saved' && !a.hasImported) return false;
+            if (!query) return true;
+            return a.icao.toLowerCase().includes(query) || String(a.name || '').toLowerCase().includes(query);
+        });
         select.replaceChildren();
-        matches.forEach((a) => select.add(new Option(`${a.icao.toUpperCase()} · ${a.name}`, a.icao)));
-        if (current && matches.some((a) => a.icao === current)) select.value = current;
+        matches.forEach((a) => select.add(new Option(`${a.icao} · ${a.name}`, a.icao.toLowerCase())));
+        if (current && matches.some((a) => a.icao.toLowerCase() === current)) {
+            select.value = current;
+        }
+        const emptyEl = byId('session-globe-empty');
+        if (emptyEl) {
+            emptyEl.hidden = matches.length > 0;
+            if (!matches.length) {
+                emptyEl.textContent = this.classicFilter === 'saved'
+                    ? 'No saved imported airports match this filter.'
+                    : 'No airports match the current filter.';
+            }
+        }
+        this.menu.dispatchEvent(new CustomEvent('catalogue-rendered', {
+            detail: {
+                entries: matches,
+                allEntries: this.catalogue,
+                selectedIcao: select.value.toUpperCase(),
+                filter: this.classicFilter,
+                query
+            }
+        }));
         this.updateClassicMeta().catch((error) => this.error(error));
     }
 
@@ -396,23 +526,68 @@ export default class Menu {
         const meta = byId('session-airport-meta');
         if (!meta) return;
         const select = byId('session-airport');
-        const icao = select.value;
+        const rawIcao = select.value;
+        const icao = rawIcao ? rawIcao.toUpperCase() : '';
+        const unsaveBox = byId('session-unsave-confirm');
+        if (unsaveBox) unsaveBox.hidden = true;
+        const unsaveBtn = this.menu.querySelector('[data-action="unsave"]');
+        const sourceWrap = byId('session-airport-source-wrap');
+
         if (!icao) {
             this.publishPreview(null);
-            meta.textContent = this.classicAirports.length ? 'No matching airports.' : '';
+            meta.textContent = this.catalogue.length ? 'No matching airports.' : '';
+            if (byId('session-selected-icao')) byId('session-selected-icao').textContent = '—';
+            if (byId('session-selected-name')) byId('session-selected-name').textContent = 'No airport selected';
+            if (byId('session-selected-source-badge')) byId('session-selected-source-badge').hidden = true;
+            if (unsaveBtn) unsaveBtn.hidden = true;
+            if (sourceWrap) sourceWrap.hidden = true;
             return;
         }
+
         this.publishPreview(null);
-        const summary = this.classicAirports.find((a) => a.icao === icao);
-        const label = summary ? `${summary.icao.toUpperCase()} · ${summary.name}` : icao.toUpperCase();
+        const entry = this.catalogue.find((a) => a.icao === icao);
+        const activeSource = this.preferredSources.get(icao) || (entry && entry.hasBundled ? 'bundled' : 'imported');
+        const label = entry ? `${entry.icao} · ${entry.name}` : icao;
         meta.textContent = label;
-        let data = this.classicAirportDetails.get(icao);
-        if (!data) {
-            data = await json(`assets/airports/${icao}.json`);
-            this.classicAirportDetails.set(icao, data);
+
+        if (byId('session-selected-icao')) byId('session-selected-icao').textContent = icao;
+        if (byId('session-selected-name')) byId('session-selected-name').textContent = (entry && entry.name) || icao;
+        const badge = byId('session-selected-source-badge');
+        if (badge && entry) {
+            badge.hidden = false;
+            badge.textContent = activeSource === 'imported' ? 'Saved import' : 'Bundled';
+            badge.dataset.sourceType = activeSource;
         }
-        if (this.page !== 'classic' || select.value !== icao) return;
-        this.publishPreview(airportPreview(data));
+        if (sourceWrap && entry) {
+            sourceWrap.hidden = entry.sourceType !== 'both';
+            sourceWrap.querySelectorAll('button[data-source]').forEach((btn) => {
+                btn.classList.toggle('is-active', btn.dataset.source === activeSource);
+            });
+        }
+        if (unsaveBtn && entry) {
+            unsaveBtn.hidden = !entry.hasImported;
+        }
+
+        const details = byId('session-airport-details');
+        if (details && entry) {
+            const setD = (k, v) => {
+                const el = details.querySelector(`[data-detail="${k}"]`);
+                if (el) el.textContent = v;
+            };
+            setD('elevation', entry.elevation != null ? `${Math.round(entry.elevation)} ft` : '—');
+            setD('saved', entry.hasImported ? 'Saved in browser' : 'Bundled');
+            setD('navdata', entry.airac ? `AIRAC ${entry.airac}` : (activeSource === 'imported' ? 'CIFP' : 'Published'));
+            const layers = [
+                entry.hasAirspace ? 'Airspace' : null,
+                entry.hasTerrain ? 'Terrain' : null
+            ].filter(Boolean);
+            setD('layers', layers.length ? layers.join(' + ') : 'Standard');
+        }
+
+        const data = await this.loadClassicAirportData(icao);
+        if (this.page !== 'classic' || select.value.toUpperCase() !== icao) return;
+        const importedAirspace = navData.getCompatibleRecord('au-airspace', { icao });
+        this.publishPreview(airportPreview(data, null, importedAirspace));
         const runways = Array.isArray(data.runways) ? data.runways.map((r) => r.name.join('/')).join(', ') : '';
         const flow = data.arrivalRunway && data.departureRunway ?
             `${data.arrivalRunway} arr / ${data.departureRunway} dep` :

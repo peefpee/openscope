@@ -12,6 +12,13 @@ import AirportController from '../airport/AirportController';
 import BaseModel from '../base/BaseModel';
 import StaticPositionModel from '../base/StaticPositionModel';
 import { buildPreSpawnAircraft } from './buildPreSpawnAircraft';
+import {
+    resolveApproachCeiling,
+    resolvePreSpawnArrivalEntries,
+    resolveRouteArrivalEntry,
+    resolveVectorArrivalEntry
+} from './ArrivalEntryResolver';
+import { isAustralianAirport } from '../constants/controllerConstants';
 import { spawnPatternModelJsonValidator } from './spawnPatternModelJsonValidator';
 import { tau } from '../math/circle';
 import { FLIGHT_CATEGORY } from '../constants/aircraftConstants';
@@ -457,6 +464,11 @@ export default class SpawnPatternModel extends BaseModel {
      * @return {number}
      */
     get altitude() {
+        const airport = AirportController.airport_get();
+        if (this.isArrival() && airport && isAustralianAirport(airport.icao)) {
+            return resolveApproachCeiling(airport);
+        }
+
         const altitude = _random(this._minimumAltitude, this._maximumAltitude);
 
         return _round(altitude, -3);
@@ -501,7 +513,12 @@ export default class SpawnPatternModel extends BaseModel {
         return route;
     }
 
-    createVectorArrivalEntry() {
+    createVectorArrivalEntry(existingPositions = []) {
+        const airport = AirportController.airport_get();
+        if (airport && isAustralianAirport(airport.icao)) {
+            return resolveVectorArrivalEntry(airport, this._routeModel, { existingPositions });
+        }
+
         const [entry, inboundFix] = this._routeModel.waypoints;
         const origin = this._generateSelfReferencedAirportPositionModel();
         const radius = origin.distanceToPosition(entry.positionModel);
@@ -1109,9 +1126,28 @@ export default class SpawnPatternModel extends BaseModel {
             return preSpawnDepartureAircraft;
         }
 
+        const airport = AirportController.current;
+        if (airport && isAustralianAirport(airport.icao)) {
+            if (this.vectors && this.isArrival()) {
+                const entries = [];
+                const existingPositions = [];
+                for (let i = 0; i < 2; i += 1) {
+                    const entry = this.createVectorArrivalEntry(existingPositions);
+                    if (entry && entry.positionModel) {
+                        entries.push(entry);
+                        existingPositions.push(entry.positionModel.relativePosition);
+                    }
+                }
+                return entries;
+            }
+
+            const entrailDistance = this.speed && this.rate > 0 ? this.speed / this.rate : 15;
+            return resolvePreSpawnArrivalEntries(airport, this._routeModel, entrailDistance);
+        }
+
         const preSpawnArrivalAircraftList = buildPreSpawnAircraft(
             spawnPatternJson,
-            AirportController.current
+            airport
         );
 
         if (this.vectors && this.isArrival()) {
@@ -1133,6 +1169,16 @@ export default class SpawnPatternModel extends BaseModel {
     _initializePositionAndHeadingForAirborneAircraft(spawnPatternJson) {
         if (spawnPatternJson.category === FLIGHT_CATEGORY.DEPARTURE) {
             return;
+        }
+
+        const airport = AirportController.airport_get();
+        if (airport && isAustralianAirport(airport.icao) && !this.vectors) {
+            const entry = resolveRouteArrivalEntry(airport, this._routeModel);
+            if (entry && entry.positionModel) {
+                this._positionModel = entry.positionModel;
+                this.heading = entry.heading;
+                return;
+            }
         }
 
         this._positionModel = this._routeModel.waypoints[0].positionModel;

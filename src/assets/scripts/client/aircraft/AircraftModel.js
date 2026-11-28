@@ -1514,8 +1514,9 @@ export default class AircraftModel {
                     alt_say = `climbing through ${radio_altitude(alt)} for ${radio_altitude(this.mcp.altitude)}`;
                 }
             } else {
-                alt_log = `at ${alt}`;
-                alt_say = `at ${radio_altitude(alt)}`;
+                const verb = this.isAustralianOperation() && this.isArrival() ? 'maintaining' : 'at';
+                alt_log = `${verb} ${alt}`;
+                alt_say = `${verb} ${radio_altitude(alt)}`;
             }
 
             const appNames = this._getControllerNamesForSector(AIRPORT_CONTROL_POSITION_NAME.APPROACH);
@@ -3161,10 +3162,14 @@ export default class AircraftModel {
 
         const airport = AirportController.airport_get();
         const cs = this.controllerState;
+        const isArrivalFromCentre = this.isArrival() &&
+            this.rules !== FLIGHT_RULES.VFR &&
+            cs.currentController === CONTROLLER_TYPE.CTR &&
+            !this.transferredToCentre;
         const isTransferredOrReleased = this.transferredToCentre ||
             cs.communicationReleased ||
             cs.currentController === CONTROLLER_TYPE.TWR ||
-            cs.currentController === CONTROLLER_TYPE.CTR ||
+            (!isArrivalFromCentre && cs.currentController === CONTROLLER_TYPE.CTR) ||
             cs.currentController === CONTROLLER_TYPE.UNICOM ||
             cs.handoffState === HANDOFF_STATE.RELEASED;
 
@@ -3189,7 +3194,7 @@ export default class AircraftModel {
             return;
         }
 
-        if (cs.currentController === CONTROLLER_TYPE.NONE && airport) {
+        if ((cs.currentController === CONTROLLER_TYPE.NONE || isArrivalFromCentre) && airport) {
             const isInsideAirspace = this.isInsideAirspace(airport);
 
             if (isInsideAirspace) {
@@ -3201,7 +3206,8 @@ export default class AircraftModel {
                 this.setControllerState({
                     currentController: CONTROLLER_TYPE.APP,
                     currentFrequency: approachCfg ? approachCfg.frequency : null,
-                    handoffState: HANDOFF_STATE.NONE
+                    handoffState: isArrivalFromCentre ? HANDOFF_STATE.COMPLETED : HANDOFF_STATE.NONE,
+                    handoffCompleted: isArrivalFromCentre
                 });
                 this._contactAircraftAfterControllabilityChange();
             } else {

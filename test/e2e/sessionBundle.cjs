@@ -478,7 +478,19 @@ test('acceptance criteria: NAV-02..04, CUS-02..04, CFG-03/05, SET-01/03, PAU-02.
         assert.equal(find('#session-menu').open, false);
 
         // PAU-04: MeasureTool Escape resets without deselecting aircraft or opening Pause; repeat Escape ignored
-        await until(() => radar.aircraftController.aircraft.list.some((a) => a.isControllable), 'controllable aircraft');
+        await until(() => radar.aircraftController.aircraft.list.length > 0, 'spawned aircraft');
+        const inbound = radar.aircraftController.aircraft.list[0];
+        if (!inbound.isControllable && typeof inbound.setControllerState === 'function') {
+            inbound.setControllerState({
+                currentController: 'APP',
+                currentFrequency: '124.400',
+                handoffState: 'COMPLETED'
+            });
+        }
+        await until(() => radar.aircraftController.aircraft.list.some((a) => (
+            a.isControllable &&
+            radar.aircraftController._stripViewController.hasStripViewModel(a)
+        )), 'controllable aircraft');
         const firstAircraft = radar.aircraftController.aircraft.list.find((a) => a.isControllable);
         radar.aircraftController._eventBus.trigger('strip-click', firstAircraft.callsign);
         assert.equal(radar.prop.input.callsign, firstAircraft.callsign);
