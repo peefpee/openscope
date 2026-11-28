@@ -21,35 +21,12 @@
     <p class="dat-status" role="status" aria-live="polite"></p>
     <div class="dat-results nice-scrollbar"></div>
     <footer hidden>
-        <div class="dat-spoken-name" hidden>
-            <label for="dat-spoken-name">Airport name for radio calls</label>
-            <input id="dat-spoken-name" type="text" maxlength="80" placeholder="e.g. Hobart">
-        </div>
-        <div class="dat-controller-names" hidden>
-            <label for="dat-approach-callsign">Approach callsign</label>
-            <input id="dat-approach-callsign" type="text" maxlength="24" placeholder="e.g. ML_APP">
-            <label for="dat-approach-frequency">Approach frequency</label>
-            <input id="dat-approach-frequency" type="text" maxlength="12" placeholder="e.g. 132.000">
-            <label for="dat-approach-radio-name">Approach radio name</label>
-            <input id="dat-approach-radio-name" type="text" maxlength="80" placeholder="e.g. Melbourne Approach">
-            <label for="dat-departure-radio-name">Departure radio name</label>
-            <input id="dat-departure-radio-name" type="text" maxlength="80" placeholder="e.g. Melbourne Departures">
-            <label for="dat-tower-callsign">Tower callsign</label>
-            <input id="dat-tower-callsign" type="text" maxlength="24" placeholder="e.g. ML_TWR">
-            <label for="dat-tower-frequency">Tower frequency</label>
-            <input id="dat-tower-frequency" type="text" maxlength="12" placeholder="e.g. 120.500">
-            <label for="dat-tower-radio-name">Tower radio name</label>
-            <input id="dat-tower-radio-name" type="text" maxlength="80" placeholder="e.g. Melbourne Tower">
-            <label for="dat-centre-select">Centre airspace</label>
-            <select id="dat-centre-select">
-                <option value="YMMM">YMMM — Melbourne Centre</option>
-                <option value="YBBB">YBBB — Brisbane Centre</option>
-            </select>
-            <label for="dat-centre-frequency">Centre frequency</label>
-            <input id="dat-centre-frequency" type="text" maxlength="12" placeholder="Simulated fallback if blank">
-            <label for="dat-centre-radio-name">Centre radio name</label>
-            <input id="dat-centre-radio-name" type="text" maxlength="80" placeholder="e.g. Melbourne Centre">
-        </div>
+        <label for="dat-runway">Operating runway</label>
+        <select id="dat-runway"></select>
+        <label for="dat-spoken-name">Airport spoken name</label>
+        <input id="dat-spoken-name" maxlength="80">
+        <label for="dat-centre">Centre sector</label>
+        <select id="dat-centre"><option>YMMM</option><option>YBBB</option></select>
         <div class="dat-terrain-section" hidden>
             <label><input id="dat-terrain-auto" type="checkbox" checked> Automatically generate terrain</label>
             <label for="dat-terrain-provider">Terrain source</label>
@@ -72,7 +49,6 @@
                 <button type="button" class="dat-terrain-clear">Clear terrain</button>
             </div>
         </div>
-        <p>Opening this scope starts a new session with simulated arrivals and departures in a 40 NM practice sector. Use the SID and STAR radar controls to display flyable procedures.</p>
-        <button type="button" class="dat-open">Open imported scope</button>
+        <button type="button" class="dat-open">Configure session</button>
     </footer>
 </dialog>

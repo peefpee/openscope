@@ -1,6 +1,6 @@
 /* eslint-disable camelcase, no-mixed-operators, object-shorthand, expected-return */
+/* global prop */
 import $ from 'jquery';
-import _has from 'lodash/has';
 import _includes from 'lodash/includes';
 import { ScopeControls } from './ui/ScopeControls';
 import AirportController from './airport/AirportController';
@@ -72,7 +72,7 @@ export default class InputController {
      * @method _init
      */
     _init() {
-        this.$body = this.$element[0];
+        [this.$body] = this.$element;
         this.$window = $(window);
         this.$commandInput = this.$element.find(SELECTORS.DOM_SELECTORS.COMMAND);
         this.$canvases = this.$element.find(SELECTORS.DOM_SELECTORS.CANVASES);
@@ -461,8 +461,17 @@ export default class InputController {
      * @private
      */
     _onKeydown(event) {
-        let { code } = event.originalEvent;
-        const isEscape = code === KEY_CODES.ESCAPE || code === LEGACY_KEY_CODES.ESCAPE;
+        const originalEvent = event.originalEvent || event;
+        let { code } = originalEvent;
+
+        if (!code) {
+            // fallback for legacy browsers like IE/Edge or events with empty code
+            code = originalEvent.keyCode;
+        }
+
+        const isEscape = code === KEY_CODES.ESCAPE ||
+            code === LEGACY_KEY_CODES.ESCAPE ||
+            originalEvent.key === 'Escape';
 
         if (!isEscape && (this._isDialog(event.target) || document.querySelector('dialog[open], .dialog.open'))) {
             // ignore input for dialogs
@@ -475,16 +484,61 @@ export default class InputController {
             return;
         }
 
-        if (this.scopeControls && this.scopeControls.down(event.originalEvent)) {
+        if (this.scopeControls && this.scopeControls.down(originalEvent)) {
             event.preventDefault();
             return;
         }
         const currentCommandInputValue = this.$commandInput.val();
 
+        if (isEscape) {
+            if (originalEvent.repeat || event.repeat) {
+                return;
+            }
 
-        if (code == null) {
-            // fallback for legacy browsers like IE/Edge
-            code = event.originalEvent.keyCode;
+            if (window.sessionBridge && window.sessionBridge.suspended) {
+                return;
+            }
+
+            const openOverlaySelector = [
+                'dialog[open]',
+                '.dialog.open',
+                '#msa-panel:not([hidden])',
+                '#tutorial.open',
+                '#airportGuide-container.open',
+                '.js-changelogContainer.open'
+            ].join(', ');
+
+            if (document.querySelector(openOverlaySelector)) {
+                UiController.closeAllDialogs();
+
+                return;
+            }
+
+            if (MeasureTool.hasPaths || MeasureTool.isMeasuring) {
+                this._resetMeasuring();
+
+                return;
+            }
+
+            if (window.sessionBridge) {
+                window.sessionBridge.pause();
+
+                return;
+            }
+
+            const hasCallsign = _includes(currentCommandInputValue, this.input.callsign);
+            const hasOnlyCallsign = currentCommandInputValue.trim() === this.input.callsign;
+            const hasSelectedCallsign = this.input.callsign !== '';
+
+            if (!hasCallsign || hasOnlyCallsign || !hasSelectedCallsign) {
+                this.deselectAircraft();
+
+                return;
+            }
+
+            this.$commandInput.val(`${this.input.callsign} `);
+
+            return;
         }
 
         // TODO: this switch can be simplified, there is a lot of repetition here
@@ -624,26 +678,6 @@ export default class InputController {
                 }
 
                 break;
-            case KEY_CODES.ESCAPE:
-            case LEGACY_KEY_CODES.ESCAPE:
-                // TODO: Probably should have its own cancel button
-                this._resetMeasuring();
-
-                UiController.closeAllDialogs();
-
-                const hasCallsign = _includes(currentCommandInputValue, this.input.callsign);
-                const hasOnlyCallsign = currentCommandInputValue.trim() === this.input.callsign;
-                const hasSelectedCallsign = this.input.callsign !== '';
-
-                if (!hasCallsign || hasOnlyCallsign || !hasSelectedCallsign) {
-                    this.deselectAircraft();
-
-                    return;
-                }
-
-                this.$commandInput.val(`${this.input.callsign} `);
-
-                break;
             default:
                 this.$commandInput.focus();
         }
@@ -660,7 +694,7 @@ export default class InputController {
         if (this.scopeControls) this.scopeControls.up(event.originalEvent);
         let { code } = event.originalEvent;
 
-        if (code == null) {
+        if (!code) {
             // fallback for legacy browsers like IE/Edge
             code = event.originalEvent.keyCode;
         }
@@ -686,6 +720,10 @@ export default class InputController {
      * @private
      */
     _isDialog($element) {
+        if (!$element || !$element.classList) {
+            return false;
+        }
+
         if ($element.classList.contains(CLASSNAMES.DIALOG)) {
             return true;
         }
@@ -910,18 +948,11 @@ export default class InputController {
                 return true;
 
             case PARSED_COMMAND_NAME.CLEAR:
-                localStorage.clear();
-                location.reload();
+                UiController.ui_log('Use Reset client settings in the Settings menu.');
 
                 break;
             case PARSED_COMMAND_NAME.AIRPORT: {
-                // TODO: it may be better to do this in the parser
-                const airportIcao = parsedCommand.args[0];
-
-                if (_has(AirportController.airports, airportIcao)) {
-                    AirportController.airport_set(airportIcao);
-                }
-
+                UiController.ui_log('Exit to the main menu to select another airport.');
                 return true;
             }
             case PARSED_COMMAND_NAME.AIRAC: {

@@ -1,14 +1,8 @@
 import $ from 'jquery';
+import { getAustralianControllerPreset } from '../constants/controllerConstants';
 import navData from '../airport/dat/NavDataCache';
 import { importOpenAir } from '../airport/dat/parseOpenAir';
 import parseMsaDat from '../airport/dat/parseMsaDat';
-import AirportController from '../airport/AirportController';
-import {
-    FREQUENCY_SOURCE,
-    deriveAustralianControllerCallsign,
-    getAustralianControllerPreset,
-    normalizeFrequency
-} from '../constants/controllerConstants';
 import { parseAirportDat } from '../airport/dat/parseAirportDat';
 import { buildDatScope, resolveWaypoints } from '../airport/dat/buildDatScope';
 import { fetchAndGenerateTerrain } from '../airport/dat/terrainGenerator';
@@ -68,17 +62,14 @@ function renderDetails($results, data) {
 }
 
 export default class DatImportView {
-    constructor($root, onMsaChange) {
+    constructor($root, onMsaChange, onPrepared) {
         this.$dialog = $root.find('#dat-import');
-        this.$toggle = $root.find('.toggle-dat-import');
         this.onMsaChange = onMsaChange;
         this.version = 0;
+        this.revision = 0;
+        this.workflow = 0;
         this.pending = Promise.resolve();
         this._terrainAbort = null;
-        this.$toggle.on('click.datImport', () => {
-            this.$dialog[0].showModal();
-            this.update();
-        });
         this.$dialog.on('keydown.datImport keyup.datImport', (event) => event.stopPropagation());
         this.$dialog.on('change.datImport', 'input[type=file]', (event) => {
             const { id, files } = event.target;
@@ -113,85 +104,18 @@ export default class DatImportView {
         });
         this.$dialog.on('change.datImport', '#dat-cached-airport', (event) => {
             const key = event.target.value;
-            this.update(() => { this.airport = navData.records.get(key); });
+            this.update(() => { this.selectedRunway = null; this.airport = navData.records.get(key); });
+        });
+        this.$dialog.on('change.datImport', '#dat-runway', (event) => {
+            this.selectedRunway = event.target.value;
+            this.revision += 1;
+            this.update();
         });
         this.$dialog.on('click.datImport', '.dat-open', () => {
             if (this.scope) {
-                if (this.scope.icao.startsWith('Y')) {
-                    const name = this.$dialog.find('#dat-spoken-name').val().trim();
-                    if (name !== (this.airport.spokenAirportName || this.scope.spokenAirportName || '')) {
-                        this.airport = { ...this.airport, spokenAirportName: name };
-                        navData.save(this.airport);
-                    }
-                    if (name) this.scope.spokenAirportName = name;
-
-                    const controllerRadioNames = {
-                        approach: this.$dialog.find('#dat-approach-radio-name').val().trim(),
-                        departure: this.$dialog.find('#dat-departure-radio-name').val().trim(),
-                        tower: this.$dialog.find('#dat-tower-radio-name').val().trim(),
-                        centre: this.$dialog.find('#dat-centre-radio-name').val().trim()
-                    };
-
-                    const appFreq = normalizeFrequency(this.$dialog.find('#dat-approach-frequency').val());
-                    const twrFreq = normalizeFrequency(this.$dialog.find('#dat-tower-frequency').val());
-                    const ctrFreq = normalizeFrequency(this.$dialog.find('#dat-centre-frequency').val());
-                    const centreSector = this.$dialog.find('#dat-centre-select').val() || 'YMMM';
-                    const appCallsign = this.$dialog.find('#dat-approach-callsign').val().trim();
-                    const twrCallsign = this.$dialog.find('#dat-tower-callsign').val().trim();
-
-                    const controllerSettings = {
-                        approachCallsign: appCallsign,
-                        approachFrequency: appFreq || '',
-                        towerCallsign: twrCallsign,
-                        towerFrequency: twrFreq || '',
-                        centreSector,
-                        centreFrequency: ctrFreq || ''
-                    };
-
-                    if (Object.values(controllerRadioNames).some(Boolean) || Object.values(controllerSettings).some(Boolean)) {
-                        this.airport = { ...this.airport, controllerRadioNames, controllerSettings };
-                        navData.save(this.airport);
-                    }
-
-                    const preset = getAustralianControllerPreset(this.scope.icao);
-                    const runwayNames = (this.scope.runways || []).reduce((acc, pair) => acc.concat(pair.name || []), []);
-                    const controllers = {
-                        approach: {
-                            callsign: appCallsign || (preset && preset.approach.callsign) ||
-                                deriveAustralianControllerCallsign(this.scope.icao, 'APP'),
-                            radioName: controllerRadioNames.approach || (preset && preset.approach.radioName),
-                            frequency: appFreq || (preset && preset.approach.frequency) || '124.100',
-                            source: appFreq ? FREQUENCY_SOURCE.USER : ((preset && preset.approach.source) || FREQUENCY_SOURCE.SIMULATED)
-                        },
-                        departure: {
-                            callsign: (preset && preset.departure && preset.departure.callsign) ||
-                                deriveAustralianControllerCallsign(this.scope.icao, 'DEP'),
-                            radioName: controllerRadioNames.departure || (preset && preset.departure && preset.departure.radioName),
-                            frequency: appFreq || (preset && preset.departure && preset.departure.frequency) || '124.100',
-                            source: appFreq ? FREQUENCY_SOURCE.USER : ((preset && preset.departure && preset.departure.source) || FREQUENCY_SOURCE.SIMULATED)
-                        },
-                        tower: [{
-                            callsign: twrCallsign || (preset && preset.tower[0] && preset.tower[0].callsign) ||
-                                deriveAustralianControllerCallsign(this.scope.icao, 'TWR'),
-                            radioName: controllerRadioNames.tower || (preset && preset.tower[0] && preset.tower[0].radioName),
-                            frequency: twrFreq || (preset && preset.tower[0] && preset.tower[0].frequency) || '118.100',
-                            runways: runwayNames,
-                            source: twrFreq ? FREQUENCY_SOURCE.USER : ((preset && preset.tower[0] && preset.tower[0].source) || FREQUENCY_SOURCE.SIMULATED)
-                        }],
-                        centre: [{
-                            sectorId: centreSector,
-                            callsign: centreSector,
-                            radioName: controllerRadioNames.centre || (centreSector === 'YBBB' ? 'Brisbane Centre' : 'Melbourne Centre'),
-                            frequency: ctrFreq || (preset && preset.centre[0] && preset.centre[0].sectorId === centreSector ?
-                                preset.centre[0].frequency : (centreSector === 'YBBB' ? '125.100' : '125.000')),
-                            source: ctrFreq ? FREQUENCY_SOURCE.USER : FREQUENCY_SOURCE.SIMULATED,
-                            rules: { default: true }
-                        }]
-                    };
-
-                    Object.assign(this.scope, { controllerRadioNames, controllers });
-                }
-                AirportController.openImportedAirport(this.scope);
+                this.scope.spokenAirportName = this.$dialog.find('#dat-spoken-name').val().trim();
+                this.scope.centreSector = this.$dialog.find('#dat-centre').val();
+                onPrepared(this.scope);
                 this.$dialog[0].close();
             }
         });
@@ -201,10 +125,14 @@ export default class DatImportView {
     update(change) {
         this.version += 1;
         const { version } = this;
+        if (change) this.revision += 1;
         this.scope = null;
         this.$dialog.find('footer').prop('hidden', true);
         this.$dialog.find('.dat-status').text('Reading navigation data…');
-        this.pending = this.pending.then(() => navData.load()).then(change).then(() => {
+        const { workflow } = this;
+        this.pending = this.pending.then(() => navData.load()).then(() => {
+            if (workflow === this.workflow && change) return change();
+        }).then(() => {
             if (version === this.version) this.render();
         }).catch((error) => {
             if (version === this.version) {
@@ -217,7 +145,9 @@ export default class DatImportView {
 
     importFile(id, file) {
         if (id !== 'dat-airspace-file' && !/\.dat$/i.test(file.name)) throw new Error('Choose an X-Plane .dat file.');
+        const { workflow } = this;
         return readFile(file).then((text) => {
+            if (workflow !== this.workflow) return;
             const cycle = /data cycle (\d{4})/i.exec(text.slice(0, 1024));
             const record = { name: file.name, cycle: cycle ? cycle[1] : '' };
             if (id === 'dat-airspace-file') {
@@ -226,25 +156,28 @@ export default class DatImportView {
             if (id === 'dat-airport-file') {
                 const data = parseAirportDat(text, file.name);
                 const key = `airport/${data.icao}`;
+                if (!/^Y[A-Z0-9]{3}$/.test(data.icao) || !buildDatScope(data, resolveWaypoints(data))) {
+                    throw new Error('Choose an Australian airport DAT with reciprocal runway thresholds.');
+                }
+                this.selectedRunway = null;
                 this.airport = {
                     ...navData.records.get(key), ...record, key, text
                 };
-                if (data.icao) return navData.save(this.airport);
+                return navData.save(this.airport);
             } else if (id === 'dat-msa-file') {
                 return navData.save({ ...record, key: 'msa', airports: parseMsaDat(text) }).then(this.onMsaChange);
-            } else {
-                // Accept legacy five-column fix files, including headerless extracts.
-                const fixFilePattern = new RegExp(
-                    '^\\s*[+-]?\\d+(?:\\.\\d+)?[ \\t]+[+-]?\\d+(?:\\.\\d+)?[ \\t]+' +
-                    '[A-Z0-9]+[ \\t]+(?:ENRT|[A-Z0-9]{4})[ \\t]+[A-Z0-9]{2}(?:[ \\t]|\\r?$)',
-                    'm'
-                );
-
-                if (!fixFilePattern.test(text)) {
-                    throw new Error('No waypoint coordinates found. Choose an X-Plane earth_fix.dat file.');
-                }
-                return navData.save({ ...record, key: 'fixes', text });
             }
+            // Accept legacy five-column fix files, including headerless extracts.
+            const fixFilePattern = new RegExp(
+                '^\\s*[+-]?\\d+(?:\\.\\d+)?[ \\t]+[+-]?\\d+(?:\\.\\d+)?[ \\t]+' +
+                    '[A-Z0-9]+[ \\t]+(?:ENRT|[A-Z0-9]{4})[ \\t]+[A-Z0-9]{2}(?:[ \\t]|\\r?$)',
+                'm'
+            );
+
+            if (!fixFilePattern.test(text)) {
+                throw new Error('No waypoint coordinates found. Choose an X-Plane earth_fix.dat file.');
+            }
+            return navData.save({ ...record, key: 'fixes', text });
         });
     }
 
@@ -276,7 +209,9 @@ export default class DatImportView {
             const details = section(summary);
             details.append($('<p>').text(`Classes and types: ${classes.join(', ')}. Regional coverage unverified.`));
             const cycles = [...new Set([...navData.records.values()].map((record) => record.cycle).filter(Boolean))];
-            if (cycles.length > 1) details.append($('<p>').text(`Imported navigation files use different AIRAC cycles: ${cycles.join(', ')}.`));
+            if (cycles.length > 1) {
+                details.append($('<p>').text(`Imported navigation files use different AIRAC cycles: ${cycles.join(', ')}.`));
+            }
             if (!airspace.cycle) details.append($('<p>').text('Airspace AIRAC cycle unknown.'));
             airspace.warnings.forEach((warning) => details.append($('<p>').text(warning)));
             this.$dialog.find('.dat-airspace-source').append(details);
@@ -293,44 +228,20 @@ export default class DatImportView {
         const data = parseAirportDat(this.airport.text, this.airport.name);
         const fixes = navData.records.get('fixes');
         const waypoints = resolveWaypoints(data, fixes && fixes.text);
-        this.scope = buildDatScope(data, waypoints);
-        this.$dialog.find('.dat-spoken-name').prop('hidden', !this.scope || !data.icao.startsWith('Y'));
-        const spokenAirportName = this.airport.spokenAirportName ||
-            (this.scope && this.scope.spokenAirportName) || '';
-
-        this.$dialog.find('#dat-spoken-name').val(spokenAirportName);
-        const controllerNames = this.airport.controllerRadioNames || {};
-        const settings = this.airport.controllerSettings || {};
-        const preset = getAustralianControllerPreset(data.icao);
-        this.$dialog.find('.dat-controller-names').prop('hidden', !this.scope || !data.icao.startsWith('Y'));
-        this.$dialog.find('#dat-approach-callsign').val(
-            settings.approachCallsign || (preset && preset.approach.callsign) ||
-            (data.icao ? deriveAustralianControllerCallsign(data.icao, 'APP') : '')
-        );
-        this.$dialog.find('#dat-approach-frequency').val(
-            settings.approachFrequency || (preset && preset.approach.frequency) || ''
-        );
-        this.$dialog.find('#dat-tower-callsign').val(
-            settings.towerCallsign || (preset && preset.tower[0] && preset.tower[0].callsign) ||
-            (data.icao ? deriveAustralianControllerCallsign(data.icao, 'TWR') : '')
-        );
-        this.$dialog.find('#dat-tower-frequency').val(
-            settings.towerFrequency || (preset && preset.tower[0] && preset.tower[0].frequency) || ''
-        );
-        this.$dialog.find('#dat-centre-select').val(
-            settings.centreSector || (preset && preset.centre[0] && preset.centre[0].sectorId) || 'YMMM'
-        );
-        this.$dialog.find('#dat-centre-frequency').val(
-            settings.centreFrequency || (preset && preset.centre[0] && !preset.centre[0].isSimulated && preset.centre[0].frequency) || ''
-        );
-        for (const [key, selector] of Object.entries({
-            approach: '#dat-approach-radio-name',
-            departure: '#dat-departure-radio-name',
-            tower: '#dat-tower-radio-name',
-            centre: '#dat-centre-radio-name'
-        })) {
-            this.$dialog.find(selector).val(controllerNames[key] || '');
+        this.scope = buildDatScope(data, waypoints, this.selectedRunway);
+        if (this.scope) {
+            const { scope } = this;
+            const preset = getAustralianControllerPreset(scope.icao);
+            const options = this.$dialog.find('#dat-runway').empty();
+            scope.runways.forEach((pair) => pair.name.forEach((name) => options.append($('<option>').text(name))));
+            options.val(scope.arrivalRunway);
+            this.$dialog.find('#dat-spoken-name').val(this.airport.spokenAirportName || scope.spokenAirportName || '');
+            this.$dialog.find('#dat-centre').val((this.airport.controllerSettings || {}).centreSector ||
+                (preset && preset.centre[0].sectorId) || 'YMMM');
+            scope.controllerRadioNames = this.airport.controllerRadioNames;
+            scope.importControllerSettings = this.airport.controllerSettings;
         }
+        if (this.scope && this.airport.spokenAirportName) this.scope.spokenAirportName = this.airport.spokenAirportName;
         renderDetails($results, data);
         const count = `${waypoints.total - waypoints.missing} of ${waypoints.total} named fixes located`;
         const status = [`${data.icao || this.airport.name} · ${count}.`];
@@ -372,13 +283,14 @@ export default class DatImportView {
 
     importTerrainGeoJson(file) {
         if (!this.scope) return;
+        const targetScope = this.scope;
         const targetIcao = this.scope.icao;
         readFile(file).then((text) => {
             const geojson = JSON.parse(text);
             if (!geojson || geojson.type !== 'FeatureCollection' || !Array.isArray(geojson.features)) {
                 throw new Error('Invalid GeoJSON FeatureCollection.');
             }
-            if (!this.scope || this.scope.icao !== targetIcao) return;
+            if (this.scope !== targetScope) return;
             this.scope.terrainGeoJson = geojson;
             this.scope.has_terrain = geojson.features.length > 0;
             const coverageNm = this._resolveTerrainCoverageNm(this.scope);
@@ -463,9 +375,14 @@ export default class DatImportView {
         });
     }
 
-    destroy() {
+    cancel() {
+        this.workflow += 1;
         this.version += 1;
-        this.$toggle.off('.datImport');
+        if (this._terrainAbort) this._terrainAbort.abort();
+    }
+
+    destroy() {
+        this.cancel();
         this.$dialog.off('.datImport');
     }
 }

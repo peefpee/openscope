@@ -79,7 +79,13 @@ export function resolveWaypoints(data, fixFile = '') {
         }
         if (rules === FLIGHT_RULES.VFR) {
             const name = line.trim().split(/\s+/).slice(6).join(' ') || fix;
-            vfrWaypoints.push({ id: fix, name, airport, region, position });
+            vfrWaypoints.push({
+                id: fix,
+                name,
+                airport,
+                region,
+                position
+            });
         } else if (!referencedNames.has(fix)) {
             const unique = !otherFixes.has(fix) || String(otherFixes.get(fix)) === String(position);
             otherFixes.set(fix, unique ? position : null);
@@ -92,7 +98,10 @@ export function resolveWaypoints(data, fixFile = '') {
         if (point) nearby[name] = point;
     }
     return {
-        positions, nearby, enrouteNames, vfrWaypoints,
+        positions,
+        nearby,
+        enrouteNames,
+        vfrWaypoints,
         missing: [...wanted].filter((key) => !positions.get(key)).length,
         total: wanted.size
     };
@@ -120,7 +129,7 @@ function pairRunways(thresholds) {
     return pairs;
 }
 
-export function buildDatScope(data, waypoints) {
+export function buildDatScope(data, waypoints, selectedRunway) {
     const runways = pairRunways(data.runways);
     if (!data.icao || !runways.length) {
         return null;
@@ -162,7 +171,8 @@ export function buildDatScope(data, waypoints) {
     const coverage = (name) => [procedures.sids, procedures.stars].filter((group) => {
         return Object.values(group).some((proc) => proc.rwy[data.icao + name]);
     }).length;
-    const active = runwayIds.reduce((best, name) => (coverage(name) > coverage(best) ? name : best));
+    const active = runwayIds.includes(selectedRunway) ? selectedRunway :
+        runwayIds.reduce((best, name) => (coverage(name) > coverage(best) ? name : best));
     const pair = runways.find((p) => p.name.includes(active));
     const end = pair.name[0] === active ? pair.end : [pair.end[1], pair.end[0]];
     const position = end[0];
@@ -175,9 +185,19 @@ export function buildDatScope(data, waypoints) {
         name: `${data.icao} DAT import`,
         isDatImport: true,
         spokenAirportName: ({
-            YMHB: 'Hobart', YMML: 'Melbourne', YSSY: 'Sydney', YBBN: 'Brisbane', YPPH: 'Perth',
-            YPAD: 'Adelaide', YSCB: 'Canberra', YPDN: 'Darwin', YBCS: 'Cairns', YMLT: 'Launceston',
-            YARM: 'Armidale', YBCG: 'Gold Coast', YMAV: 'Avalon'
+            YMHB: 'Hobart',
+            YMML: 'Melbourne',
+            YSSY: 'Sydney',
+            YBBN: 'Brisbane',
+            YPPH: 'Perth',
+            YPAD: 'Adelaide',
+            YSCB: 'Canberra',
+            YPDN: 'Darwin',
+            YBCS: 'Cairns',
+            YMLT: 'Launceston',
+            YARM: 'Armidale',
+            YBCG: 'Gold Coast',
+            YMAV: 'Avalon'
         })[data.icao],
         // Only scope.fixes enters the IFR navigation library.
         vfrWaypoints: waypoints.vfrWaypoints,

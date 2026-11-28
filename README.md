@@ -6,7 +6,9 @@
 
 # openScope Air Traffic Control Simulator
 
-Visit http://openscope.io to begin playing now!
+Choose **Play → Classic** to search and select a bundled Australian airport (with ICAO, name, and runway overview) or **Play → Custom** to import a CIFP airport DAT. Custom setup also accepts shared waypoint, MSA and OpenAir data. Choose the runway flow, traffic and controller frequencies, then select **Start session**. IFR arrivals start enabled. Departures and VFR are opt-in.
+
+Press **Escape** to pause, change settings or exit (after closing any open radar panel, overlay, or measuring tool). Confirming exit records session metrics locally in the browser (no visible score UI or server leaderboard) and returns to the main menu. Refreshing discards the current game. Speech and radar preferences persist across sessions; **Reset client settings** restores defaults without deleting cached navigation data or score records. Add or change navigation files from Custom setup before starting the next game, and exit to the main menu to switch airports.
 
 If you're just getting started, try the tutorial and see the [command reference](documentation/commands.md) for a full list of commands you can use. For information on each airport, see the [airport guide](documentation/airport-guides/airport-guide-directory.md).
 
@@ -35,6 +37,7 @@ From a terminal (or GitBash for Windows users), run the following commands:
 Additional verification commands:
 
 - `npm run lint` — run ESLint over `src/assets/scripts/client/**`
+- `npm run test:session` — exercise ten alternating Classic/Custom sessions against the production bundle after building
 - `npm run validator -- <icao>` (or `npm run validator:yssy`) — validate an airport JSON asset after `npm run build`
 
 Once that finishes doing its thing, you should see something close to the following in the terminal:

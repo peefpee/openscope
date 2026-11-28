@@ -118,6 +118,9 @@ test.serial('1. Departure operations: Tower ownership, initial contact phraseolo
 });
 
 test.serial('2. MSA popup: open/close, Escape, X button, airport switch, empty state, and async load guard', (t) => {
+    const hasOwnDoc = Object.prototype.hasOwnProperty.call(global, 'document');
+    const prevDoc = global.document;
+    global.document = window.document;
     AirportController.current = { icao: 'YBNA' };
     NavDataCache.records.delete('msa');
     const $root = $(`
@@ -134,9 +137,13 @@ test.serial('2. MSA popup: open/close, Escape, X button, airport switch, empty s
                 <ul></ul>
             </aside>
         </div>
-    `);
+    `).appendTo(window.document.body);
     const loadStub = sinon.stub(NavDataCache, 'load').callsFake(() => new Promise((resolve) => setTimeout(resolve, 20)));
     const msa = new MsaView($root);
+    const restoreDoc = () => {
+        if (hasOwnDoc) global.document = prevDoc;
+        else delete global.document;
+    };
 
     try {
         // Initially hidden
@@ -167,19 +174,60 @@ test.serial('2. MSA popup: open/close, Escape, X button, airport switch, empty s
             t.false(msa.isOpen());
             t.true($root.find('#msa-panel').prop('hidden'));
 
-            // Escape key closes when open
-            msa.setOpen(true);
+            // Escape key closes when open, stops propagation to window, and restores focus to opener
+            const $toggle = $root.find('.toggle-msa');
+            $toggle.trigger('focus');
+            $toggle.trigger('click');
             t.true(msa.isOpen());
-            $root.find('#msa-panel').trigger($.Event('keydown', { key: 'Escape' }));
-            t.false(msa.isOpen());
-            t.true($root.find('#msa-panel').prop('hidden'));
+            let windowSawEscape = false;
+            const windowHandler = (e) => {
+                if (e.key === 'Escape') windowSawEscape = true;
+            };
+            $(window).on('keydown.msaTest', windowHandler);
+            try {
+                // Auto-repeat Escape (with repeat only on native originalEvent) must keep #msa-panel open and stop propagation
+                const closeBtn = $root.find('#msa-panel header button')[0];
+                closeBtn.dispatchEvent(new window.KeyboardEvent('keydown', {
+                    key: 'Escape',
+                    code: 'Escape',
+                    repeat: true,
+                    bubbles: true,
+                    cancelable: true
+                }));
+                t.true(msa.isOpen());
+                t.false($root.find('#msa-panel').prop('hidden'));
+                t.false(windowSawEscape);
+
+                document.dispatchEvent(new window.KeyboardEvent('keydown', {
+                    key: 'Escape',
+                    code: 'Escape',
+                    repeat: true,
+                    bubbles: true,
+                    cancelable: true
+                }));
+                t.true(msa.isOpen());
+                t.false($root.find('#msa-panel').prop('hidden'));
+                t.false(windowSawEscape);
+
+                $(document).trigger($.Event('keydown', { key: 'Escape' }));
+                t.false(msa.isOpen());
+                t.true($root.find('#msa-panel').prop('hidden'));
+                t.false(windowSawEscape);
+                t.is(document.activeElement, $toggle[0]);
+            } finally {
+                $(window).off('keydown.msaTest', windowHandler);
+            }
         }).finally(() => {
             msa.destroy();
+            $root.remove();
             loadStub.restore();
+            restoreDoc();
         });
     } catch (err) {
         msa.destroy();
+        $root.remove();
         loadStub.restore();
+        restoreDoc();
         throw err;
     }
 });

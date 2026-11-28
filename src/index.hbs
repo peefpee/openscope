@@ -1,5 +1,8 @@
 {{#extend "layout"}}
     {{#content "body" mode="append" }}
+        {{> _sessionMenu}}
+        {{> _datImport}}
+        <div id="radar-workspace" hidden>
         <div id="canvases"></div>
         <div id="log"></div>
         <aside id="msa-panel" hidden aria-hidden="true" aria-label="Minimum sector altitudes">
@@ -7,7 +10,6 @@
             <select aria-label="MSA centre" hidden></select>
             <p class="msa-reference"></p>
             <p class="msa-empty" hidden></p>
-            <button type="button" class="msa-open-import" hidden>Import earth_msa.dat</button>
             <canvas width="400" height="280" aria-hidden="true" hidden></canvas>
             <ul></ul>
         </aside>
@@ -21,8 +23,7 @@
             the following partials should be combined into a _modals.hbs which should include
             any other modals defined with in the JS (Settings, Tutorial, etc)
         --}}
-        {{> _airportSwitch}}
-        {{> _datImport}}
+
 
         {{> _airportGuide}}
 
@@ -31,5 +32,6 @@
         {{> _paused}}
 
         {{> _loadingView}}
+        </div>
     {{/content}}
 {{/extend}}

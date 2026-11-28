@@ -496,15 +496,13 @@ openScope has a number of commands that do not change simulation mechanics, know
 
 ### Airport
 
-_Information -_ Changes the current airport to the one specified.
+_Information -_ Live airport switching during an active radar session is disabled. Entering `airport` or `airport [ICAO]` logs a reminder to exit to the main menu (`Escape` → **Exit**) to select another airport.
 
-_Parameters -_ The ICAO (four-letter) code of the desired airport.
-
-_Syntax -_ `airport [ICAO]`
+_Syntax -_ `airport` or `airport [ICAO]`
 
 ### Pause
 
-_Information -_ Pauses the simulation. Click anywhere to resume.
+_Information -_ Pauses the simulation and opens the Escape pause menu (**Resume**, **Settings**, **Exit**). Press `Escape` or click **Resume** to continue.
 
 _Syntax -_ `pause`
 

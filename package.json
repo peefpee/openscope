@@ -17,6 +17,7 @@
     "server": "npm run start",
     "start": "node public/assets/scripts/server/index.js",
     "test": "ava --concurrency=5",
+    "test:session": "node --test test/e2e/sessionBundle.cjs",
     "test:coverage": "nyc ava --concurrency=5",
     "validator": "validator -a",
     "validator:yssy": "validator -a yssy"
@@ -77,7 +78,8 @@
     "handlebars": "4.1.2",
     "jquery": "3.5.0",
     "lodash": "4.17.21",
-    "raf": "3.4.1"
+    "raf": "3.4.1",
+    "regenerator-runtime": "0.13.2"
   },
   "devDependencies": {
     "@babel/core": "7.4.4",

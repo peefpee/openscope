@@ -72,6 +72,7 @@ class SpawnScheduler {
     }
 
     isDeparturesEnabledForAirport(airport = AirportController.current) {
+        if (airport && airport.data && airport.data.sessionTraffic) return airport.data.sessionTraffic.departures;
         if (!airport || !isAustralianAirport(airport.icao)) {
             return true;
         }
@@ -94,7 +95,9 @@ class SpawnScheduler {
         const next = Boolean(enabled);
         this._departuresEnabled = next;
         this._departuresAirportIcao = airport ? airport.icao : null;
-        if (airport && isAustralianAirport(airport.icao)) {
+        if (airport && airport.data && airport.data.sessionTraffic) {
+            airport.data.sessionTraffic.departures = next;
+        } else if (airport && isAustralianAirport(airport.icao)) {
             try {
                 if (typeof localStorage !== 'undefined') {
                     const key = this._departuresStorageKey(airport.icao);
@@ -131,7 +134,8 @@ class SpawnScheduler {
     }
 
     startScheduler() {
-        this.setVfrEnabled(false);
+        const traffic = AirportController.current.data.sessionTraffic;
+        this.setVfrEnabled(Boolean(traffic && traffic.vfr));
         this._departuresEnabled = this.isDeparturesEnabledForAirport();
         this._departuresAirportIcao = AirportController.current ? AirportController.current.icao : null;
         // TODO: rename to createSchedulesWithTimer
@@ -148,9 +152,11 @@ class SpawnScheduler {
      * @method createSchedulesFromList
      */
     createSchedulesFromList() {
+        const traffic = AirportController.current.data.sessionTraffic;
         const departuresAllowed = this.isDeparturesEnabledForAirport();
         _forEach(SpawnPatternCollection.spawnPatternModels, (spawnPatternModel) => {
-            if (!departuresAllowed && !spawnPatternModel.isAirborneAtSpawn()) {
+            const skipArrival = traffic && !traffic.arrivals && spawnPatternModel.isArrival();
+            if (skipArrival || (!departuresAllowed && !spawnPatternModel.isAirborneAtSpawn())) {
                 spawnPatternModel.scheduleId = null;
                 return;
             }
@@ -170,6 +176,8 @@ class SpawnScheduler {
      * @method resetAirborneTraffic
      */
     resetAirborneTraffic() {
+        const traffic = AirportController.current.data.sessionTraffic;
+        if (traffic && !traffic.arrivals) return;
         SpawnPatternCollection.spawnPatternModels.filter((s) => s.isAirborneAtSpawn()).forEach((spawnPatternModel) => {
             spawnPatternModel.preSpawnAircraftList = [];
             spawnPatternModel.createPreSpawnAircraft(this._aircraftController);
@@ -225,6 +233,8 @@ class SpawnScheduler {
      * @param spawnPatternModel {SpawnPatternModel}
      */
     resetTimer(spawnPatternModel) {
+        const traffic = AirportController.current.data.sessionTraffic;
+        if (traffic && (spawnPatternModel.isArrival() ? !traffic.arrivals : !traffic.departures)) return;
         let timePassed = 0;
         const { scheduleId } = spawnPatternModel;
 

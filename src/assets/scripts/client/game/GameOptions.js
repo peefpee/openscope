@@ -64,7 +64,14 @@ export default class GameOptions {
      */
     addOption(optionProps) {
         const optionStorageKey = this.buildStorageName(optionProps.name);
-        const storedOptionValue = global.localStorage.getItem(optionStorageKey);
+        let storedOptionValue = null;
+
+        try {
+            storedOptionValue = global.localStorage.getItem(optionStorageKey);
+        } catch (error) {
+            // Storage may be unavailable or restricted
+        }
+
         this._options[optionProps.name] = optionProps;
         let optionValue = optionProps.defaultValue;
 
@@ -110,7 +117,12 @@ export default class GameOptions {
         this[name] = value;
         const optionStorageKey = this.buildStorageName(name);
 
-        global.localStorage.setItem(optionStorageKey, value);
+        try {
+            global.localStorage.setItem(optionStorageKey, value);
+        } catch (error) {
+            // Ignore storage quota/access errors so live option updates still apply
+        }
+
         EventTracker.recordEvent(TRACKABLE_EVENT.SETTINGS, name, value);
 
         if (this._options[name].onChangeEventHandler) {

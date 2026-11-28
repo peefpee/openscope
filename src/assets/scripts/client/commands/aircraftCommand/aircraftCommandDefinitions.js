@@ -159,7 +159,7 @@ function circuitJoinValidator(args) {
  */
 const SINGLE_ARG_AIRCRAFT_COMMANDS = {
     airport: {
-        validate: singleArgumentValidator,
+        validate: zeroOrOneArgumentValidator,
         parse: noop
     },
     outbound: { validate: singleArgumentValidator, parse: noop },

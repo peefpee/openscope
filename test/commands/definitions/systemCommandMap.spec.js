@@ -28,9 +28,9 @@ ava('aliases, noop parser and zeroArgumentsValidator used by airac', t => {
     self_alias(t, AIRCRAFT_COMMAND_MAP, 'airac');
 });
 
-ava('aliases, noop parser and singleArgumentValidator used by airport', t => {
+ava('aliases, noop parser and zeroOrOneArgumentValidator used by airport', t => {
     const [parse, validate] = extractParseAndValidate(t, 'airport');
-    t.true(parse === noopParse() && validate === singleArgVal());
+    t.true(parse === noopParse() && validate === zeroOrOneArgumentVal());
     self_alias(t, AIRCRAFT_COMMAND_MAP, 'airport');
 });
 

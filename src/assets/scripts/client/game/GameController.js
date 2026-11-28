@@ -5,7 +5,6 @@ import EventBus from '../lib/EventBus';
 import EventTracker from '../EventTracker';
 import GameOptions from './GameOptions';
 import TimeKeeper from '../engine/TimeKeeper';
-import { round } from '../math/core';
 import { EVENT } from '../constants/eventNames';
 import { GAME_OPTION_NAMES } from '../constants/gameOptionConstants';
 import { TIME } from '../constants/globalConstants';
@@ -78,32 +77,6 @@ export const GAME_EVENTS = {
 };
 
 /**
- * Event log description for a point event
- * @type {Object}
- */
-const GAME_EVENTS_DESCRIPTION = {
-    AIRSPACE_BUST: 'Aircraft left radar coverage as arrival',
-    ARRIVAL: 'Aircraft landed successfully',
-    COLLISION: 'Multiple aircraft collided',
-    DEPARTURE: 'Departing aircraft switched to center',
-    EXTREME_CROSSWIND_OPERATION: 'Aircraft operated with extreme crosswind',
-    EXTREME_TAILWIND_OPERATION: 'Aircraft operated with extreme tailwind',
-    GO_AROUND: 'Aircraft had to go around',
-    HIGH_CROSSWIND_OPERATION: 'Aircraft operated with high crosswind',
-    HIGH_TAILWIND_OPERATION: 'Aircraft operated with high tailwind',
-    ILLEGAL_APPROACH_CLEARANCE: 'Aircraft intercept angle was > 30 degrees',
-    LOCALIZER_INTERCEPT_ABOVE_GLIDESLOPE: 'Aircraft intercepted localizer above glidescope',
-    NOT_CLEARED_ON_ROUTE: 'Aircraft left airspace without being on route',
-    SEPARATION_LOSS: 'Aircraft violated separation requirements',
-    NO_TAKEOFF_SEPARATION: 'Aircraft violated same runway separation requirements',
-    TOWER_HANDOFF: 'Aircraft handed off to tower',
-    CENTRE_HANDOFF: 'Aircraft handed off to centre',
-    FREQ_CHANGE_APPROVED: 'Frequency change approved for departure',
-    MISSED_TOWER_HANDOFF: 'Failed to transfer arrival to tower',
-    MISSED_CENTRE_HANDOFF: 'Departure left without centre handoff'
-};
-
-/**
  * @class GameController
  */
 class GameController {
@@ -124,7 +97,7 @@ class GameController {
         this.game.frequency = 1;
         this.game.events = {};
         this.game.timeouts = [];
-        this.game.last_score = 0;
+        this.game.history = [];
         this.game.score = 0;
         this.game.option = new GameOptions();
         this.theme = THEME.DEFAULT;
@@ -221,7 +194,7 @@ class GameController {
         this.game.frequency = 1;
         this.game.events = {};
         this.game.timeouts = [];
-        this.game.last_score = 0;
+        this.game.history = [];
         this.game.score = 0;
         this.game.option = new GameOptions();
         this.theme = THEME.DEFAULT;
@@ -254,11 +227,11 @@ class GameController {
             throw new TypeError(`Expected a game event listed in GAME_EVENTS, but instead received ${gameEvent}`);
         }
 
+        if (window.sessionBridge && (window.sessionBridge.suspended || !this.game.focused)) return;
         this.game.events[gameEvent] += 1;
         this.game.score += GAME_EVENTS_POINT_VALUES[gameEvent];
-
-        this.game_updateScore();
-        this.updateScoreHistory(gameEvent);
+        this.game.history.push({ event: gameEvent, simulatedSeconds: TimeKeeper.accumulatedDeltaTime });
+        if (this.game.history.length > 256) this.game.history.shift();
     }
 
 
@@ -283,10 +256,9 @@ class GameController {
             this.game.events[key] = 0;
         });
 
+        this.game.history = [];
         // Reset score
         this.game.score = 0;
-
-        this.game_updateScore();
     }
 
     /**
@@ -375,6 +347,10 @@ class GameController {
      * @method game_pause_toggle
      */
     game_pause_toggle() {
+        if (window.sessionBridge) {
+            window.sessionBridge.pause();
+            return;
+        }
         if (TimeKeeper.isPaused) {
             EventTracker.recordEvent(TRACKABLE_EVENT.OPTIONS, 'pause', 'false');
             this.game_unpause();
@@ -461,49 +437,6 @@ class GameController {
      */
     destroyTimers() {
         this.game.timeouts = [];
-    }
-
-    /**
-     * @for GameController
-     * @method game_updateScore
-     * @param score {number}
-     */
-    game_updateScore() {
-        if (this.game.score === this.game.last_score) {
-            return;
-        }
-
-        const $scoreElement = $(SELECTORS.DOM_SELECTORS.SCORE);
-
-        $scoreElement.text(round(this.game.score));
-
-        // TODO: wait, what? Why not just < 0?
-        if (this.game.score < -0.51) {
-            $scoreElement.addClass(SELECTORS.CLASSNAMES.NEGATIVE);
-        } else {
-            $scoreElement.removeClass(SELECTORS.CLASSNAMES.NEGATIVE);
-        }
-
-        this.game.last_score = this.game.score;
-    }
-
-    /**
-     * @for GameController
-     * @method updateScoreHistory
-     * @param event {String} one of the events listed in GAME_EVENTS
-     */
-    updateScoreHistory(event) {
-        let points = GAME_EVENTS_POINT_VALUES[event];
-
-        if (points < 0) {
-            points = `<span class="gameScoreHistory-points_negative">${points}</span>`;
-        }
-
-        const html = $(`<li>${GAME_EVENTS_DESCRIPTION[event]}: ${points}</li>`);
-        const listView = $(SELECTORS.DOM_SELECTORS.SCORE_LOG);
-
-        listView.append(html);
-        listView.scrollTop(listView.get(0).scrollHeight);
     }
 
     /**
@@ -607,6 +540,11 @@ class GameController {
     _onWindowBlur(event) {
         this.game.focused = false;
 
+        if (window.sessionBridge) {
+            TimeKeeper.setPause(true);
+            return;
+        }
+
         // resetting back to 1 here so when focus returns, we can reliably reset
         // `#game.delta` to 0 to prevent jumpiness
         TimeKeeper.updateSimulationRate(1);
@@ -629,8 +567,9 @@ class GameController {
     _onWindowFocus(event) {
         this.game.focused = true;
 
-        // if was already manually paused when lost focus, respect that
-        if ($('html').hasClass(SELECTORS.CLASSNAMES.PAUSED)) {
+        // if was already manually paused or menu-suspended when lost focus, respect that
+        if ((window.sessionBridge && window.sessionBridge.suspended) ||
+            $('html').hasClass(SELECTORS.CLASSNAMES.PAUSED)) {
             return;
         }
 

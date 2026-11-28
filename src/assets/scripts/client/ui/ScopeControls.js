@@ -66,7 +66,12 @@ function panFactor(event) {
     return modifier(event, options.fast) ? options.fastFactor : 1;
 }
 
-export function controlsSettings() {
+export function applyScopeControls(values) {
+    Object.assign(options, values || defaults);
+}
+
+export function controlsSettings(onChange = () => {}) {
+    const persist = () => { save(); onChange({ ...options }); };
     const group = $('<details>').append($('<summary>').text('Radar keyboard controls'));
     const message = $('<p role="status">');
     const fields = {};
@@ -85,7 +90,7 @@ export function controlsSettings() {
                     return;
                 }
                 options[key] = value;
-                save();
+                persist();
                 refresh();
                 message.empty();
             });
@@ -94,17 +99,18 @@ export function controlsSettings() {
                 const value = Number(field.val());
                 if (Number.isFinite(value) && value > 0 && !(key === 'maxZoom' && value < options.minZoom) &&
                     !(key === 'minZoom' && value > options.maxZoom)) options[key] = value;
-                save();
+                persist();
                 refresh();
             });
         } else {
             field = $('<select>');
-            (key === 'editing' ? ['Off', 'Primary', 'Alt', 'Shift'] : ['Shift', 'Alt', 'Primary']).forEach((name) => field.append($('<option>').text(name)));
+            const choices = key === 'editing' ? ['Off', 'Primary', 'Alt', 'Shift'] : ['Shift', 'Alt', 'Primary'];
+            choices.forEach((name) => field.append($('<option>').text(name)));
             field.on('change', () => {
                 const value = field.val();
                 if ((key === 'fast' && value === options.precise) || (key === 'precise' && value === options.fast)) {
                     message.text('Choose different fast and precise modifiers.');
-                } else { options[key] = value; save(); message.empty(); }
+                } else { options[key] = value; persist(); message.empty(); }
                 refresh();
             });
         }
@@ -114,7 +120,7 @@ export function controlsSettings() {
     refresh();
     return group.append(message, $('<button type="button">').text('Reset radar controls').on('click', () => {
         Object.assign(options, defaults);
-        save();
+        persist();
         refresh();
         message.empty();
     }));
@@ -141,7 +147,8 @@ export class ScopeControls {
 
     eligible() {
         const focused = document.activeElement;
-        return !document.hidden && !document.querySelector('dialog[open], .dialog.open') &&
+        return !(window.sessionBridge && window.sessionBridge.suspended) &&
+            !document.hidden && !document.querySelector('dialog[open], .dialog.open') &&
             (focused === this.element || focused === document.body ||
                 (focused === this.command && this.editingPan));
     }

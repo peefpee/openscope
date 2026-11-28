@@ -24,7 +24,8 @@ export const speech_init = () => {
     prop.speech.synthesis = window.speechSynthesis;
     prop.speech.enabled = false;
 
-    if (_get(localStorage, STORAGE_KEY.ATC_SPEECH_ENABLED, false) === true) {
+    const legacyEnabled = String(_get(localStorage, STORAGE_KEY.ATC_SPEECH_ENABLED, false)) === 'true';
+    if (window.sessionBridge ? window.sessionBridge.settings.enabled : legacyEnabled) {
         prop.speech.enabled = true;
         $(SELECTORS.DOM_SELECTORS.TOGGLE_SPEECH).addClass(SELECTORS.CLASSNAMES.ACTIVE);
     }
@@ -88,6 +89,7 @@ export const _selectVoice = (pilotVoice, voices) => {
  * @param sentence
  */
 export const speech_say = (sentence, pilotVoice) => {
+    if (window.sessionBridge && window.sessionBridge.suspended) return;
     if (prop.speech && prop.speech.synthesis != null && prop.speech.enabled) {
         let textToSay = '';
 
@@ -114,11 +116,15 @@ export const speech_say = (sentence, pilotVoice) => {
 
         const spokenText = radio_spokenText(textToSay);
         const utterance = new SpeechSynthesisUtterance(spokenText);
-        const selectedVoice = _selectVoice(pilotVoice, prop.speech.synthesis.getVoices());
+        const settings = window.sessionBridge && window.sessionBridge.settings;
+        const voices = prop.speech.synthesis.getVoices();
+        const preferred = settings && voices.find((v) => v.voiceURI === settings.voiceURI);
+        const selectedVoice = preferred || _selectVoice(pilotVoice, voices);
 
         utterance.lang = (selectedVoice && selectedVoice.lang) || 'en-AU';
         utterance.voice = selectedVoice;
-        utterance.rate = (pilotVoice && pilotVoice.rate) || 1.0;
+        utterance.volume = settings ? settings.volume : 1;
+        utterance.rate = settings ? settings.rate : (pilotVoice && pilotVoice.rate) || 1.0;
         utterance.pitch = (pilotVoice && pilotVoice.pitch) || 1.0;
 
         // say the words

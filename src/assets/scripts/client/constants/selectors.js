@@ -78,7 +78,6 @@ export const CLASSNAMES = {
     STRIP_VIEW_TRIGGER: 'js-stripView-trigger',
     STRIP_VIEW: 'js-stripView',
     STRIP: 'strip',
-    SWITCH_AIRPORT: 'switch-airport',
     TOGGLE_AIRPORT_GUIDE: 'toggle-airport-guide',
     TOGGLE_AIRSPACE: 'toggle-airspace',
     TOGGLE_CHANGELOG: 'js-changelogToggle',
@@ -106,7 +105,6 @@ export const CLASSNAMES = {
 export const IDS = {
     AIRPORT_GUIDE: 'airportGuide-bd',
     AIRPORT_GUIDE_CONTAINER: 'airportGuide-container',
-    AIRPORT_SWITCH: 'airport-switch',
     AUTOCOMPLETE: 'autocomplete',
     AUTOCOMPLETE_INPUT: 'autocomplete-input',
     AUTOCOMPLETE_OUTPUT: 'autocomplete-output',
@@ -122,8 +120,6 @@ export const IDS = {
     TOGGLE_OPTIONS: 'toggle-options',
     TUTORIAL: 'tutorial',
     GITHUB_EXTERNAL_LINK: 'js-github-external-link',
-    SCORE: 'score',
-    SCORE_LOG: 'score-log',
     SIDEBAR: 'sidebar'
 };
 

@@ -301,7 +301,7 @@ export function getScoreState() {
         score: GameController.game.score,
         lastScore: GameController.game.last_score,
         events: { ...GameController.game.events },
-        domScoreText: $(SELECTORS.DOM_SELECTORS.SCORE).text().trim(),
-        domLogItems: $(SELECTORS.DOM_SELECTORS.SCORE_LOG).find('li').map((_, el) => $(el).text().trim()).get()
+        domScoreText: $('#score').text().trim(),
+        domLogItems: $('#score-log').find('li').map((_, el) => $(el).text().trim()).get()
     };
 }

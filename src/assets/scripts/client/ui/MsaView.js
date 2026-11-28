@@ -59,7 +59,7 @@ export default class MsaView {
 
         this.$toggle.off('.msa').on('click.msa', (event) => {
             event.preventDefault();
-            this.setOpen(!this._isOpen);
+            this.setOpen(!this._isOpen, event.currentTarget);
         });
         this.$panel.find('header button, .msa-close').off('.msa').on('click.msa', (event) => {
             event.preventDefault();
@@ -74,7 +74,9 @@ export default class MsaView {
         this.$panel.off('.msa').on('keydown.msa keyup.msa', (event) => {
             if (event.key === 'Escape' && this._isOpen) {
                 event.preventDefault();
-                this.setOpen(false);
+                if (!((event.originalEvent && event.originalEvent.repeat) || event.repeat)) {
+                    this.setOpen(false);
+                }
             }
             event.stopPropagation();
         });
@@ -82,7 +84,10 @@ export default class MsaView {
             $(document).off('.msa').on('keydown.msa', (event) => {
                 if (event.key === 'Escape' && this._isOpen) {
                     event.preventDefault();
-                    this.setOpen(false);
+                    event.stopPropagation();
+                    if (!((event.originalEvent && event.originalEvent.repeat) || event.repeat)) {
+                        this.setOpen(false);
+                    }
                 }
             });
         }
@@ -92,13 +97,16 @@ export default class MsaView {
         return this._isOpen;
     }
 
-    setOpen(open) {
+    setOpen(open, opener = null) {
         const nextOpen = Boolean(open);
+        const wasOpen = this._isOpen;
         this._loadToken += 1;
         const token = this._loadToken;
 
-        if (nextOpen && !this._isOpen && typeof document !== 'undefined') {
-            this._previousFocus = document.activeElement;
+        if (nextOpen && !wasOpen && typeof document !== 'undefined') {
+            const active = document.activeElement;
+            const hasActive = active && active !== document.body && active !== document.documentElement;
+            this._previousFocus = hasActive ? active : (opener || this.$toggle[0] || null);
         }
 
         this._isOpen = nextOpen;
@@ -118,9 +126,16 @@ export default class MsaView {
             if (closeBtn && typeof closeBtn.focus === 'function') {
                 closeBtn.focus();
             }
-        } else if (this._previousFocus && typeof this._previousFocus.focus === 'function' &&
-            typeof document !== 'undefined' && document.contains(this._previousFocus)) {
-            this._previousFocus.focus();
+        } else if (wasOpen) {
+            const fallback = this.$toggle[0];
+            const target = this._previousFocus && typeof this._previousFocus.focus === 'function' &&
+                typeof document !== 'undefined' && document.contains(this._previousFocus) ?
+                this._previousFocus :
+                fallback;
+            if (target && typeof target.focus === 'function' &&
+                typeof document !== 'undefined' && document.contains(target)) {
+                target.focus();
+            }
             this._previousFocus = null;
         }
     }
@@ -131,7 +146,9 @@ export default class MsaView {
         const icao = airport && airport.icao ? airport.icao.toUpperCase() : '';
         const record = navData.records.get('msa');
         const rawEntries = record && record.airports && icao ? record.airports[icao] : null;
-        this.entries = Array.isArray(rawEntries) ? rawEntries.filter((e) => e && Array.isArray(e.sectors) && e.sectors.length) : [];
+        this.entries = Array.isArray(rawEntries) ?
+            rawEntries.filter((e) => e && Array.isArray(e.sectors) && e.sectors.length) :
+            [];
         this.$panel.find('strong').text(`${icao || ''} MSA`.trim());
         this.$select.empty().prop('hidden', !this.entries.length);
         this.entries.forEach((entry, i) => {
@@ -144,7 +161,7 @@ export default class MsaView {
             this.$panel.find('.msa-empty')
                 .text(record ?
                     `No MSA record found for ${icao || 'this airport'} in the imported earth_msa.dat.` :
-                    'Import earth_msa.dat using the + button to display MSA sectors.')
+                    'Add earth_msa.dat during Custom airport setup to display MSA sectors.')
                 .prop('hidden', false);
             this.$panel.find('.msa-open-import').prop('hidden', Boolean(record));
             return;
@@ -167,8 +184,12 @@ export default class MsaView {
         if (!ambiguous) drawDiagram(canvas, sectors);
         sectors.forEach(({ bearing, altitude, radius }, i) => {
             const end = sectors[(i + 1) % sectors.length].bearing;
-            const range = sectors.length === 1 ? 'All bearings' : (ambiguous ? bearingLabel(bearing) :
-                `${bearingLabel(bearing)}–${bearingLabel(end)}`);
+            let range = `${bearingLabel(bearing)}–${bearingLabel(end)}`;
+            if (sectors.length === 1) {
+                range = 'All bearings';
+            } else if (ambiguous) {
+                range = bearingLabel(bearing);
+            }
             $list.append($('<li>').text(`${range} · ${Number(altitude).toLocaleString('en-US')} ft · ${radius} NM`));
         });
     }

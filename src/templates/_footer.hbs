@@ -39,7 +39,7 @@
            autocorrect="off"
            autocomplete="off"
            spellcheck="false"
-           autofocus />
+           aria-label="Aircraft command" />
     {{!-- move to ul li.hlist --}}
 
     <ul class="controls-menu">
@@ -51,11 +51,6 @@
         <li class="control-item">
             <a class="control-icon toggle-pause" title="Pause simulation">
                 <img src="assets/images/icons/pause.png" />
-            </a>
-        </li>
-        <li class="control-item">
-            <a class="control-icon switch-airport" title="Switch airport">
-                <img src="assets/images/icons/airport.png" />
             </a>
         </li>
         <li class="control-item">
@@ -110,22 +105,10 @@
             </div>
         </li>
         <li class="control-item">
-            <button type="button" class="control-icon toggle-dat-import" title="Import airport data"
-                    aria-label="Import airport data" aria-haspopup="dialog" aria-controls="dat-import">+</button>
-        </li>
-        <li class="control-item">
             <a class="control-icon">
                 <img src="assets/images/icons/cog.png" />
             </a>
             <div class="control-item-content">
-                <a class="control" id="toggle-options">
-                    <img src="assets/images/icons/cog.png" />
-                    <span>Settings</span>
-                </a>
-                <a class="control toggle-speech">
-                    <img src="assets/images/icons/speech.png" />
-                    <span>Speech</span>
-                </a>
                 <a class="control toggle-traffic">
                     <img src="assets/images/icons/traffic.png" />
                     <span>Traffic</span>
@@ -161,14 +144,6 @@
                     <img src="assets/images/GitHub-Mark-Light-32px.png" class="github-logo" />
                     <span>GitHub</span>
                 </a>
-            </div>
-        </li>
-        <li class="control-item">
-            <a class="control-icon">
-                <div id="score" class="notSelectable" title="Score">-</div>
-            </a>
-            <div class="control-item-content wide">
-                <ul id="score-log" class="nice-scrollbar"></ul>
             </div>
         </li>
     </ul>

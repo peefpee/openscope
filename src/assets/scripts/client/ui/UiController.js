@@ -1,11 +1,9 @@
 import $ from 'jquery';
-import _keys from 'lodash/keys';
 import AirportController from '../airport/AirportController';
 import EventBus from '../lib/EventBus';
 import EventTracker from '../EventTracker';
 import GameController from '../game/GameController';
 import MsaView from './MsaView';
-import DatImportView from './DatImportView';
 import SettingsController from './SettingsController';
 import TrafficRateController from './TrafficRateController';
 import VideoMapController from './VideoMapController';
@@ -78,26 +76,6 @@ class UiController {
         this.$element = null;
 
         /**
-         * Element of the airport selection dialog
-         *
-         * @for UiController
-         * @property $airportDialog
-         * @type {Jquery|Element}
-         * @default null
-         */
-        this.$airportDialog = null;
-
-        /**
-         * Element of the body of the airport selection dialog
-         *
-         * @for UiController
-         * @property $airportDialogBody
-         * @type {Jquery|Element}
-         * @default null
-         */
-        this.$airportDialogBody = null;
-
-        /**
          * Element of the airport guide dialog
          *
          * @for UiController
@@ -106,17 +84,6 @@ class UiController {
          * @default null
          */
         this.$airportGuideDialog = null;
-
-
-        /**
-         * Element of the airport search bar
-         *
-         * @for UiController
-         * @property $airportSearch
-         * @type {Jquery|Element}
-         * @default null
-         */
-        this.$airportSearch = null;
 
         /**
          * Element of the changelog dialog
@@ -187,16 +154,6 @@ class UiController {
          * @default null
          */
         this.$pausedImg = null;
-
-        /**
-         * Footer button element used to toggle the airport selection dialog on/off
-         *
-         * @for UiController
-         * @property $switchAirport
-         * @type {Jquery|Element}
-         * @default null
-         */
-        this.$switchAirport = null;
 
         /**
          * Footer button element used to toggle the airport guide on/off
@@ -366,17 +323,13 @@ class UiController {
         this.videoMapController = new VideoMapController($element);
 
         this.$element = $element;
-        this.$airportDialog = this.$element.find(SELECTORS.DOM_SELECTORS.AIRPORT_SWITCH);
-        this.$airportDialogBody = this.$airportDialog.find(SELECTORS.DOM_SELECTORS.DIALOG_BODY);
         this.$airportGuideDialog = this.$element.find(SELECTORS.DOM_SELECTORS.AIRPORT_GUIDE_CONTAINER);
-        this.$airportSearch = this.$element.find(SELECTORS.DOM_SELECTORS.AIRPORT_SEARCH);
         this.$changelogDialog = this.$element.find(SELECTORS.DOM_SELECTORS.CHANGELOG_CONTAINER);
         this.$fastForwards = this.$element.find(SELECTORS.DOM_SELECTORS.FAST_FORWARDS);
         this.$githubLinkElement = this.$element.find(SELECTORS.DOM_SELECTORS.GITHUB_EXTERNAL_LINK);
         this.$log = this.$element.find(SELECTORS.DOM_SELECTORS.LOG);
         this.$frequencyPanel = this.$element.find('#frequency-panel');
         this.$pausedImg = this.$element.find(`${SELECTORS.DOM_SELECTORS.PAUSED} img`);
-        this.$switchAirport = this.$element.find(SELECTORS.DOM_SELECTORS.SWITCH_AIRPORT);
         this.$toggleAirportGuide = this.$element.find(SELECTORS.DOM_SELECTORS.TOGGLE_AIRPORT_GUIDE);
         this.$toggleAirspace = this.$element.find(SELECTORS.DOM_SELECTORS.TOGGLE_AIRSPACE);
         this.$toggleChangelog = this.$element.find(SELECTORS.DOM_SELECTORS.TOGGLE_CHANGELOG);
@@ -425,12 +378,9 @@ class UiController {
 
         // TODO: move these to properly bound handler methods
 
-        // using keyup here because the search is based on the contents of the search bar
-        this.$airportSearch.on('keyup', (event) => this._onInitiateAirportSearch(event));
         this.$fastForwards.on('click', (event) => GameController.game_timewarp_toggle(event));
         this.$githubLinkElement.on('click', (event) => this.onClickGithubLink(event));
         this.$pausedImg.on('click', (event) => GameController.game_unpause(event));
-        this.$switchAirport.on('click', (event) => this.onToggleAirportList(event));
         this.$toggleAirportGuide.on('click', (event) => this.onToggleAirportGuide(event));
         this.$toggleAirspace.on('click', (event) => this.onToggleAirspace(event));
         this.$toggleChangelog.on('click', (event) => this.onToggleChangelog(event));
@@ -448,7 +398,6 @@ class UiController {
 
         this._setupControlMenus();
         this.msaView = new MsaView(this.$element);
-        this.datImportView = new DatImportView(this.$element, () => this.msaView.refresh());
 
         return this;
     }
@@ -490,11 +439,9 @@ class UiController {
     disable() {
         this._eventBus.off(EVENT.AIRPORT_CHANGE, this.onAirportChangeHandler);
         this._eventBus.off(EVENT.CHAT_LOG_DURATION_CHANGE, this.onChatLogDurationChangeHandler);
-        this.$airportSearch.off('keyup', (event) => this._onInitiateAirportSearch(event));
         this.$fastForwards.off('click', (event) => GameController.game_timewarp_toggle(event));
         this.$githubLinkElement.off('click', (event) => this.onClickGithubLink(event));
         this.$pausedImg.off('click', (event) => GameController.game_unpause(event));
-        this.$switchAirport.off('click', (event) => this.onToggleAirportList(event));
         this.$toggleAirportGuide.off('click', (event) => this.onToggleAirportGuide(event));
         this.$toggleAirspace.off('click', (event) => this.onToggleAirspace(event));
         this.$toggleChangelog.off('click', (event) => this.onToggleChangelog(event));
@@ -510,7 +457,6 @@ class UiController {
         this.$toggleTutorial.off('click', (event) => this.onToggleTutorial(event));
         this.$toggleVideoMap.off('click', (event) => this.onToggleVideoMap(event));
 
-        this.datImportView.destroy();
         this.msaView.destroy();
         clearTimeout(this._controlMenuCloseTimeout);
         this.$element
@@ -537,10 +483,7 @@ class UiController {
         this.trafficRateController = null;
 
         this.$element = null;
-        this.$airportDialog = null;
-        this.$airportDialogBody = null;
         this.$airportGuideDialog = null;
-        this.$airportSearch = null;
         this.$changelogDialog = null;
         this.$fastForwards = null;
         this.$githubLinkElement = null;
@@ -548,7 +491,6 @@ class UiController {
         this.$frequencyPanel = null;
         this.chatLogDuration = null;
         this.$pausedImg = null;
-        this.$switchAirport = null;
         this.$toggleAirportGuide = null;
         this.$toggleAirspace = null;
         this.$toggleChangelog = null;
@@ -581,9 +523,7 @@ class UiController {
      * @for UiController
      * @method ui_complete
      */
-    ui_complete() {
-        this._buildAirportList();
-    }
+    ui_complete() {}
 
     /**
      * @for UiController
@@ -657,7 +597,13 @@ class UiController {
             this.$frequencyPanel.append($active);
         }
 
-        adjacentFrequencies.forEach(({ callsign, frequency, radioName, type, isSimulated }) => {
+        adjacentFrequencies.forEach(({
+            callsign,
+            frequency,
+            radioName,
+            type,
+            isSimulated
+        }) => {
             const $row = $('<li class="frequency-panel-row"></li>');
             const simTag = isSimulated ? ' (sim)' : '';
 
@@ -703,12 +649,12 @@ class UiController {
      * @method closeAllDialogs
      */
     closeAllDialogs() {
-        if (this.isAirportGuideDialogOpen()) {
-            this.onToggleAirportGuide();
+        if (this.msaView && this.msaView.isOpen()) {
+            this.msaView.setOpen(false);
         }
 
-        if (this.isAirportSelectionDialogOpen()) {
-            this.onToggleAirportList();
+        if (this.isAirportGuideDialogOpen()) {
+            this.onToggleAirportGuide();
         }
 
         if (this.isChangelogDialogOpen()) {
@@ -744,17 +690,6 @@ class UiController {
     }
 
     /**
-     * Returns whether the airport selection dialog is open
-     *
-     * @for UiController
-     * @method isAirportSelectionDialogOpen
-     * @return {boolean}
-     */
-    isAirportSelectionDialogOpen() {
-        return this.$airportDialog.hasClass(SELECTORS.CLASSNAMES.OPEN);
-    }
-
-    /**
      * Returns whether the changelog dialog is open
      *
      * @for UiController
@@ -774,176 +709,6 @@ class UiController {
      */
     isTutorialDialogOpen() {
         return this.$tutorialDialog.hasClass(SELECTORS.CLASSNAMES.OPEN);
-    }
-
-    /**
-     * @for uiController
-     * @method onClickAirportListItemHandler
-     * @paam event {jquery event}
-     */
-    onClickAirportListItemHandler(event) {
-        if (AirportController.airports[event.data] !== AirportController.current) {
-            AirportController.airport_set(event.data);
-            this._onClickCloseAirportDialog();
-        }
-    }
-
-    /**
-     * Loop through each airport defined in the `AirportController` and build
-     * a list item that can be appended to the #airport-list element.
-     *
-     * @for UiController
-     * @method _buildAirportList
-     * @private
-     */
-    _buildAirportList() {
-        // clear out the contents of this element
-        this.$airportDialogBody.empty();
-
-        const airports = _keys(AirportController.airports).sort();
-        let difficulty = '';
-
-        for (let i = 0; i < airports.length; i++) {
-            const { name, icao, level } = AirportController.airports[airports[i]];
-
-            difficulty = this._buildAirportListIconForDifficultyLevel(level);
-            const $airportListItem = $(this._buildAirportListItemTemplate(icao, difficulty, name));
-
-            // TODO: replace with an onClick() handler
-            $airportListItem.click(icao.toLowerCase(), (event) => {
-                if (AirportController.airports[event.data] !== AirportController.current) {
-                    AirportController.airport_set(event.data);
-
-                    this._onClickCloseAirportDialog();
-                }
-            });
-
-            this.$airportDialogBody.append($airportListItem);
-        }
-    }
-
-    /**
-     * Given a `difficultyLevel`, create a string with the correct icon char code
-     * that can be used in the airport list
-     *
-     * @for UiController
-     * @method _buildAirportListIconForDifficultyLevel
-     * @param difficultyLevel {string}
-     * @return difficulty {string}
-     * @private
-     */
-    _buildAirportListIconForDifficultyLevel(difficultyLevel) {
-        let difficulty;
-        const icon = '&#9992;';
-
-        switch (difficultyLevel) {
-            case 'beginner':
-                difficulty = icon;
-                break;
-            case 'easy':
-                difficulty = icon.repeat(2);
-                break;
-            case 'medium':
-                difficulty = icon.repeat(3);
-                break;
-            case 'hard':
-                difficulty = icon.repeat(4);
-                break;
-            case 'expert':
-                difficulty = icon.repeat(5);
-                break;
-            default:
-                difficulty = '?';
-                break;
-        }
-
-        return difficulty;
-    }
-
-    /**
-     * @for uiController
-     * @method _buildAirportListItemTemplate
-     * @param icao {string}
-     * @param difficulty {string}
-     * @param name {string}
-     * @return {DOM element|string}
-     */
-    _buildAirportListItemTemplate(icao, difficulty, name) {
-        return `
-            <li class="airport-list-item" data-icao="${icao.toLowerCase()}">
-                <span style="font-size: 7pt" class="difficulty">${difficulty}</span>
-                <span class="icao">${icao.toUpperCase()}</span>
-                <span class="name">${name}</span>
-            </li>
-        `;
-    }
-
-    /**
-     * @for UiController
-     * @method _onClickOpenAirportDialog
-     */
-
-    _onClickOpenAirportDialog() {
-        EventTracker.recordEvent(TRACKABLE_EVENT.AIRPORTS, 'airport-switcher', 'open');
-        this.$airportDialog.addClass(SELECTORS.CLASSNAMES.OPEN);
-
-        const $previousActiveAirport = this.$airportDialogBody.find(SELECTORS.DOM_SELECTORS.AIRPORT_LIST_ITEM_IS_ACTIVE);
-
-        // Remove the active class from a no-longer-selected airport in the list.
-        if ($previousActiveAirport.length !== 0) {
-            $previousActiveAirport.removeClass(SELECTORS.CLASSNAMES.AIRPORT_LIST_ITEM_IS_ACTIVE);
-        }
-
-        const icao = AirportController.airport_get().icao.toLowerCase();
-        if (!AirportController.current.data.isDatImport) {
-            this.$airportDialogBody.find(`li[data-icao="${icao}"]`).addClass(SELECTORS.CLASSNAMES.AIRPORT_LIST_ITEM_IS_ACTIVE);
-        }
-
-        this.$switchAirport.addClass(SELECTORS.CLASSNAMES.ACTIVE);
-    }
-
-
-    /**
-     * @for UiController
-     * @method _onInitiateAirportSearch
-     */
-    _onInitiateAirportSearch() {
-        EventTracker.recordEvent(TRACKABLE_EVENT.AIRPORTS, 'airport-search', 'start');
-
-        const value = this.$airportSearch.val().toLowerCase();
-
-        $('.dialog-body li').each(
-            function() {
-                $(this).toggle($(this).text().toLowerCase().indexOf(value) > -1);
-            }
-        );
-    }
-
-    /**
-     * @for UiController
-     * @method _onClickCloseAirportDialog
-     * @private
-     */
-    _onClickCloseAirportDialog() {
-        EventTracker.recordEvent(TRACKABLE_EVENT.AIRPORTS, 'airport-switcher', 'close');
-        this.$airportDialog.removeClass(SELECTORS.CLASSNAMES.OPEN);
-        this.$switchAirport.removeClass(SELECTORS.CLASSNAMES.ACTIVE);
-        this.$airportSearch.val(null);
-        $('.dialog-body li').each(() => $(this).toggle(true));
-    }
-
-    /**
-     * @for UiController
-     * @method onToggleAirportList
-     */
-    onToggleAirportList() {
-        if (this.$airportDialog.hasClass(SELECTORS.CLASSNAMES.OPEN)) {
-            this._onClickCloseAirportDialog();
-
-            return;
-        }
-
-        this._onClickOpenAirportDialog();
     }
 
     /**

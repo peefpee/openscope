@@ -359,6 +359,8 @@ class TimeKeeper {
         }
 
         this._isPaused = nextPause;
+        this._frameDeltaTime = 0;
+        this._previousFrameTimestamp = this.gameTimeSeconds;
     }
 
     /**

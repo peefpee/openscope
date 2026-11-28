@@ -1,0 +1,33 @@
+<dialog id="session-menu" aria-labelledby="session-title">
+    <main>
+        <h1 id="session-title">openScope</h1>
+        <section data-page="home"><button data-action="play">Play</button><button data-action="settings">Settings</button></section>
+        <section data-page="modes" hidden><button data-action="classic">Classic <small>Bundled airports</small></button><button data-action="custom">Custom <small>Import an Australian CIFP airport</small></button><button data-action="home">Back</button></section>
+        <section data-page="classic" hidden><label>Filter airports<input id="session-airport-search" type="search" placeholder="Search ICAO or name"></label><label>Airport<select id="session-airport"></select></label><p id="session-airport-meta" role="status"></p><button data-action="configure">Configure session</button><button data-action="play">Back</button></section>
+        <section data-page="setup" hidden>
+            <fieldset id="session-setup-traffic"><legend>Traffic</legend><label><input id="session-arrivals" type="checkbox" checked> IFR arrivals</label><label><input id="session-departures" type="checkbox"> IFR departures</label><label><input id="session-vfr" type="checkbox"> VFR traffic</label>
+            <label>IFR traffic rate<select id="session-rate"><option value="0.5">0.5×</option><option selected value="1">1× airport rate</option><option value="1.5">1.5×</option><option value="2">2×</option></select></label>
+            <label>IFR arrival share<select id="session-mix"><option value="">Airport mix</option><option value="0.25">25%</option><option value="0.5">50%</option><option value="0.75">75%</option></select></label></fieldset>
+            <label>Runway flow<select id="session-runways"></select></label>
+            <details><summary>Controller frequencies</summary><div id="session-frequencies"></div></details>
+            <button data-action="start">Start session</button><button data-action="selection">Back</button>
+        </section>
+        <section data-page="loading" hidden><p role="status">Preparing radar and traffic…</p><button data-action="cancel">Cancel</button></section>
+        <section data-page="pause" hidden><button data-action="resume">Resume</button><button data-action="settings">Settings</button><button data-action="confirm">Exit</button></section>
+        <section data-page="confirm" hidden><p>Current traffic and clearances will be lost.</p><button data-action="pause">Cancel</button><button data-action="exit">Exit to main menu</button></section>
+        <section data-page="settings" hidden>
+            <label>Language<select disabled><option>English (Australia)</option></select></label>
+            <fieldset><legend>Aircraft speech</legend>
+                <label><input type="checkbox" id="voice-enabled"> Enable radio speech</label>
+                <label>Voice<select id="voice-choice"></select></label>
+                <label>Volume<input id="voice-volume" type="range" min="0" max="1" step=".05"></label>
+                <label>Speech rate<input id="voice-rate" type="range" min=".5" max="2" step=".1"></label>
+                <button data-action="testVoice">Test voice</button>
+            </fieldset>
+            <details><summary>Radar and controls</summary><div id="radar-preferences"></div></details>
+            <button data-action="fullscreen">Toggle fullscreen</button><button data-action="reset">Reset client settings</button><button data-action="settingsBack">Back</button>
+        </section>
+        <section data-page="reset" hidden><p>Restore default speech, radar and control preferences?</p><button data-action="settings">Cancel</button><button data-action="resetYes">Restore defaults</button></section>
+        <p id="session-error" role="alert"></p>
+    </main>
+</dialog>

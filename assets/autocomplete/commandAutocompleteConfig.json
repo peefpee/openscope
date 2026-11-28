@@ -1102,26 +1102,6 @@
   ],
   "system": [
     {
-      "id": "airport",
-      "variants": [
-        {
-          "aliases": [
-            "airport"
-          ],
-          "altkeys": [],
-          "explain": "change to <u>airport</u>"
-        }
-      ],
-      "paramsets": [
-        {
-          "example": "KSEA",
-          "explain": "change to <u>airport</u>",
-          "candidate": "^[a-z]{0,4}$",
-          "validate": "^([a-z]{4})$"
-        }
-      ]
-    },
-    {
       "id": "pause",
       "variants": [
         {

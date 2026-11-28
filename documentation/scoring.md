@@ -1,5 +1,8 @@
 # Scoring
 
+The simulator tracks event counts and points internally. On confirmed exit it stores a versioned record in this browser, keyed by session ID, with the airport, mode, initial traffic options, timestamps and active simulated time. It retains up to 100 completed sessions, with lifetime event counts for each session and its latest 256 events in chronological order. Refreshing or closing a tab discards the unfinished game. Storage failure permits normal exit. These local records are unsuitable for a trusted leaderboard.
+
+
 Scoring is based on many separate variables. The score is computed by
 summing all of the variables after multiplying each one by its own
 unique factor (so that a fatal collision docks many more points than a

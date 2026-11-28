@@ -178,8 +178,6 @@ export default class AppController {
         this.aircraftController = new AircraftController(aircraftTypeDefinitionList, this.airlineController, this.scopeModel);
         this.scoreController = new ScoreController(this.aircraftController);
 
-        SpawnScheduler.init(this.aircraftController);
-
         // TEMPORARY!
         // some instances are attached to the window here as an intermediate step away from global functions.
         // this allows for any module file to call window.{module}.{method} and will make the transition to
@@ -241,6 +239,7 @@ export default class AppController {
         GameController.complete();
         this.canvasController.canvas_complete();
         UiController.ui_complete();
+        SpawnScheduler.init(this.aircraftController);
     }
 
     /**
