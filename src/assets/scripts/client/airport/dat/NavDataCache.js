@@ -1,3 +1,9 @@
+function expiredTerrain(records) {
+    return [...records].filter((record) => record.key.startsWith('terrain/'))
+        .sort((a, b) => String(b.generatedAt).localeCompare(String(a.generatedAt)) || b.key.localeCompare(a.key))
+        .slice(10);
+}
+
 // Store local imports separately so a worldwide fix or MSA file is shared across airports.
 export class NavDataCache {
     constructor() {
@@ -13,11 +19,15 @@ export class NavDataCache {
                 request.onerror = () => reject(request.error);
                 request.onsuccess = () => {
                     const db = request.result;
-                    const tx = db.transaction('files', 'readonly');
+                    const tx = db.transaction('files', 'readwrite');
                     const all = tx.objectStore('files').getAll();
+                    all.onsuccess = () => {
+                        expiredTerrain(all.result).forEach(({ key }) => tx.objectStore('files').delete(key));
+                    };
                     tx.onabort = () => { db.close(); reject(tx.error); };
                     tx.oncomplete = () => {
                         all.result.forEach((record) => this.records.set(record.key, record));
+                        expiredTerrain(this.records.values()).forEach(({ key }) => this.records.delete(key));
                         this.db = db;
                         db.onversionchange = () => { db.close(); this.db = null; };
                         resolve();
@@ -44,12 +54,24 @@ export class NavDataCache {
         return this.load().then(() => {
             this.records.set(record.key, record);
             this.memoryOnly.add(record.key);
+            const terrain = record.key.startsWith('terrain/');
+            if (terrain) {
+                expiredTerrain(this.records.values()).forEach(({ key }) => {
+                    this.records.delete(key);
+                    this.memoryOnly.delete(key);
+                });
+            }
             if (!this.db) return;
             return new Promise((resolve, reject) => {
                 const tx = this.db.transaction('files', 'readwrite');
                 tx.oncomplete = resolve;
                 tx.onabort = () => reject(tx.error);
-                tx.objectStore('files').put(record);
+                const store = tx.objectStore('files');
+                store.put(record);
+                if (terrain) {
+                    const keys = store.getAll();
+                    keys.onsuccess = () => expiredTerrain(keys.result).forEach(({ key }) => store.delete(key));
+                }
             }).then(() => {
                 if (this.records.get(record.key) === record) this.memoryOnly.delete(record.key);
             }).catch(() => {
@@ -58,12 +80,19 @@ export class NavDataCache {
         });
     }
 
-    getTerrain(icao, { coverageNm } = {}) {
+    getTerrain(icao, options = {}) {
         const code = String(icao || '').trim().toUpperCase();
         if (!code) return null;
         const record = this.records.get(`terrain/${code}`);
         if (!record || record.formatVersion !== 1 || !record.geojson) return null;
-        if (coverageNm != null && record.coverageNm !== coverageNm) return null;
+        if (options.coverageNm != null && record.coverageNm !== options.coverageNm) return null;
+        if (options.coordinates && JSON.stringify(options.coordinates) !== JSON.stringify(record.coordinates)) return null;
+        if (record.provider !== 'manual') {
+            if (options.provider && options.provider !== 'auto' && options.provider !== record.provider) return null;
+            for (const field of ['resolution', 'datasetVersion', 'contourIntervalFt']) {
+                if (options[field] != null && options[field] !== record[field]) return null;
+            }
+        }
         return record;
     }
 
@@ -84,14 +113,6 @@ export class NavDataCache {
             attribution: entry.attribution || '',
             formatVersion: 1
         };
-        // Enforce bounded cache size (max 10 terrain entries, evicting oldest)
-        const terrainEntries = [...this.records.values()]
-            .filter((r) => r && typeof r.key === 'string' && r.key.startsWith('terrain/') && r.key !== record.key)
-            .sort((a, b) => String(a.generatedAt || '').localeCompare(String(b.generatedAt || '')));
-        while (terrainEntries.length >= 10) {
-            const oldest = terrainEntries.shift();
-            if (oldest) this.records.delete(oldest.key);
-        }
         return this.save(record);
     }
 
@@ -99,9 +120,9 @@ export class NavDataCache {
         const code = String(icao || '').trim().toUpperCase();
         if (!code) return Promise.resolve();
         const key = `terrain/${code}`;
-        this.records.delete(key);
-        this.memoryOnly.delete(key);
         return this.load().then(() => {
+            this.records.delete(key);
+            this.memoryOnly.delete(key);
             if (!this.db) return;
             return new Promise((resolve) => {
                 const tx = this.db.transaction('files', 'readwrite');

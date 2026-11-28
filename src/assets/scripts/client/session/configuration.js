@@ -1,3 +1,4 @@
+import { parseCoordinate } from '../utilities/unitConverters';
 import ControllerConfigModel from '../controller/ControllerConfigModel';
 import { FREQUENCY_SOURCE, normalizeFrequency } from '../constants/controllerConstants';
 
@@ -121,4 +122,47 @@ export function prepareAirport(source, traffic, mode, edits) {
     if (departure) airport.radio.dep = departure.radioName;
     if (tower.length) airport.radio.twr = tower[0].radioName;
     return airport;
+}
+
+// Copy before freezing so presentation consumers cannot mutate a prepared airport.
+function freezeTree(value) {
+    if (value && typeof value === 'object') {
+        Object.values(value).forEach(freezeTree);
+        Object.freeze(value);
+    }
+    return value;
+}
+
+export function airportPreview(airport, flow, importedAirspace) {
+    let airspace = airport.airspace || null;
+    if (airport.isDatImport && importedAirspace && airport.position) {
+        const [lat, lon] = airport.position;
+        const radius = (airport.ctr_radius || 74) / 111;
+        const width = radius / Math.cos(lat * Math.PI / 180);
+        // Clip candidate regions by their geographic extent without starting the radar model.
+        airspace = importedAirspace.regions.filter(({ poly }) => poly &&
+            poly.some(([y]) => y >= lat - radius) && poly.some(([y]) => y <= lat + radius) &&
+            poly.some(([, x]) => x >= lon - width) && poly.some(([, x]) => x <= lon + width));
+    }
+    const activeFlow = flow || { arrival: airport.arrivalRunway, departure: airport.departureRunway };
+    const runways = (airport.runways || []).map(({ name, end }) => ({
+        identifiers: name,
+        thresholds: end.map((point) => point.slice(0, 2).map(parseCoordinate)),
+        arrivalThreshold: name.indexOf(activeFlow.arrival),
+        departureThreshold: name.indexOf(activeFlow.departure)
+    }));
+    return freezeTree(JSON.parse(JSON.stringify({
+        icao: airport.icao.toUpperCase(),
+        name: airport.name || null,
+        coordinates: airport.position ? airport.position.slice(0, 2).map(parseCoordinate) : null,
+        runways,
+        activeFlow,
+        flows: runwayModes(airport),
+        airspace,
+        terrain: airport.terrainGeoJson || null,
+        terrainUrl: airport.has_terrain && !airport.isDatImport ?
+            `assets/airports/terrain/${airport.icao.toLowerCase()}.geojson` : null,
+        traffic: (airport.spawnPatterns || []).map(({ category, rate }) => ({ category, rate })),
+        controllers: controllerDraft(airport)
+    })));
 }

@@ -288,19 +288,23 @@ export function fetchAndGenerateTerrain({
     coverageNm = 60,
     contourIntervalFt = 1000,
     provider = 'auto',
+    gridSize = 21,
     signal = null,
     onProgress = () => {}
 }) {
     const bounds = computeTerrainBounds(lat, lon, coverageNm);
-    const gridSize = 21; // 21x21 = 441 points (5 batches of <= 100 points)
+    if (![11, 21, 25].includes(gridSize)) return Promise.reject(new Error('Unsupported terrain grid size.'));
 
     onProgress('Downloading elevation data...');
 
+    const params = `icao=${encodeURIComponent(icao)}&lat=${lat}&lon=${lon}&coverageNm=${coverageNm}` +
+        `&intervalFt=${contourIntervalFt}&gridSize=${gridSize}&provider=${encodeURIComponent(provider)}`;
     const tryServer = (typeof window !== 'undefined' && window.location && window.location.protocol !== 'file:') ?
-        fetch(`/api/terrain?icao=${encodeURIComponent(icao)}&lat=${lat}&lon=${lon}&coverageNm=${coverageNm}&intervalFt=${contourIntervalFt}&provider=${encodeURIComponent(provider)}`, { signal })
+        fetch(`/api/terrain?${params}`, { signal })
             .then((resp) => (resp.ok ? resp.json() : null))
             .then((payload) => {
-                if (payload && Array.isArray(payload.elevations) && payload.gridSize && payload.bounds) {
+                if (payload && Array.isArray(payload.elevations) && payload.gridSize === gridSize &&
+                    payload.elevations.length === gridSize * gridSize && payload.bounds) {
                     const serverGrid = [];
                     for (let r = 0; r < payload.gridSize; r++) {
                         serverGrid.push(payload.elevations.slice(r * payload.gridSize, (r + 1) * payload.gridSize));

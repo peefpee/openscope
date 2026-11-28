@@ -2041,7 +2041,6 @@ export default class CanvasController {
                     [-42, -58, 42, 58, -74, 74, -90, 90, -106, 106] :
                     [0, -16, 16, -32, 32, -48, 48, -64, 64];
 
-                let drawY = baseY + candidateOffsets[0];
                 for (const dy of candidateOffsets) {
                     const y = baseY + dy;
                     const box = {
@@ -2051,12 +2050,11 @@ export default class CanvasController {
                         bottom: y + halfH
                     };
                     if (!overlapsPlaced(box)) {
-                        drawY = y;
+                        cc.fillText(content, baseX, y);
                         placedLabelBoxes.push(box);
                         break;
                     }
                 }
-                cc.fillText(content, baseX, drawY);
             }
 
             cc.restore();
