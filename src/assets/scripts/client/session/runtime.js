@@ -4,15 +4,23 @@ import App from '../App';
 import GameController from '../game/GameController';
 import TimeKeeper from '../engine/TimeKeeper';
 import navData from '../airport/dat/NavDataCache';
+import VoiceController from '../voice/VoiceController';
+import VoiceStatusView from '../voice/ui/VoiceStatusView';
 
 export default async function startRadar(session) {
     const bridge = { ...session, suspended: false };
     window.sessionBridge = bridge;
+    let voiceController = null;
+    let voiceStatusView = null;
     const apply = (settings) => {
         bridge.settings = settings;
         if (window.prop && window.prop.speech) window.prop.speech.enabled = settings.enabled;
         for (const [key, value] of Object.entries(settings.radar)) {
             if (GameController.game.option[key] !== value) GameController.game.option.setOptionByName(key, value);
+        }
+        if (voiceController && settings.voiceControl) {
+            voiceController.configure(settings.voiceControl);
+            if (voiceStatusView) voiceStatusView.setEnabled(Boolean(settings.voiceControl.enabled));
         }
     };
     const cancelSpeech = () => { if (window.speechSynthesis) window.speechSynthesis.cancel(); };
@@ -23,16 +31,26 @@ export default async function startRadar(session) {
             bridge.suspended = true;
             GameController.game_pause();
             cancelSpeech();
+            if (voiceController) voiceController.setPaused(true);
         },
         resume() {
             cancelSpeech();
             bridge.suspended = false;
             GameController.game_unpause();
             TimeKeeper.setPause(!document.hasFocus());
+            if (voiceController) voiceController.setPaused(false);
         },
         stop() {
             bridge.suspended = true;
             cancelSpeech();
+            if (voiceController) {
+                voiceController.destroy();
+                voiceController = null;
+            }
+            if (voiceStatusView) {
+                voiceStatusView.destroy();
+                voiceStatusView = null;
+            }
             GameController.destroyTimers();
         },
         snapshot: () => ({
@@ -54,6 +72,17 @@ export default async function startRadar(session) {
         apply(session.settings);
         if (session.scopeOptions) applyScopeControls(session.scopeOptions);
         if (session.stage) session.stage('Loading simulator assets');
-        return new App($('body'), airport); // Controller instances belong to this browsing context.
+        const app = new App($('body'), airport); // Controller instances belong to this browsing context.
+        voiceController = new VoiceController({
+            settings: (session.settings && session.settings.voiceControl) || {},
+            aircraftController: app.aircraftController,
+            aircraftCommander: app.aircraftCommander,
+            onStateChange: (ev) => {
+                if (voiceStatusView) voiceStatusView.update(ev);
+            }
+        });
+        voiceStatusView = new VoiceStatusView(document.body, voiceController);
+        window.voiceController = voiceController;
+        return app;
     } catch (error) { session.fail(error); }
 }

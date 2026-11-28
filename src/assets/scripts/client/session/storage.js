@@ -2,8 +2,21 @@ import { GAME_OPTION_VALUES } from '../constants/gameOptionConstants';
 
 const KEY = 'openscope.clientSettings.v1';
 const SCORE_PREFIX = 'openscope.sessionScore.v1.';
+const voiceControlDefaults = {
+    enabled: false,
+    provider: 'browser',
+    pttKey: 'ControlLeft',
+    gamepadButton: null,
+    deviceId: '',
+    lang: 'en-AU',
+    whisperModel: 'base.en',
+    whisperServerUrl: 'http://localhost:8080/v1/audio/transcriptions',
+    whisperServerModel: 'whisper-1',
+    llmFallbackEnabled: false,
+    confirmationMode: 'local-auto'
+};
 const defaults = {
-    language: 'en-AU', enabled: true, rate: 1, volume: 0.8, voiceURI: ''
+    language: 'en-AU', enabled: true, rate: 1, volume: 0.8, voiceURI: '', voiceControl: { ...voiceControlDefaults }
 };
 
 export function resolveOption(option, value) {
@@ -19,7 +32,7 @@ export function resolveOption(option, value) {
 }
 
 export function preferences(reset = false) {
-    const result = { ...defaults, radar: {} };
+    const result = { ...defaults, voiceControl: { ...voiceControlDefaults }, radar: {} };
     let stored = {};
     if (!reset) {
         try {
@@ -33,6 +46,9 @@ export function preferences(reset = false) {
     }
     if (Number.isFinite(stored.rate) && stored.rate >= 0.5 && stored.rate <= 2) result.rate = stored.rate;
     if (Number.isFinite(stored.volume) && stored.volume >= 0 && stored.volume <= 1) result.volume = stored.volume;
+    if (!reset && stored.voiceControl && typeof stored.voiceControl === 'object') {
+        Object.assign(result.voiceControl, stored.voiceControl);
+    }
     for (const option of GAME_OPTION_VALUES) {
         let value = stored.radar && stored.radar[option.name];
         try {

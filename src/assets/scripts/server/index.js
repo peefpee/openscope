@@ -3,6 +3,7 @@ const http = require('http');
 const https = require('https');
 const path = require('path');
 const colors = require('ansi-colors');
+const { registerVoiceRoutes } = require('./voiceInterpret');
 
 const app = express();
 const server = http.Server(app);
@@ -10,6 +11,7 @@ const server = http.Server(app);
 const PORT = process.env.PORT || 3003;
 
 app.use('/assets', express.static(path.join(__dirname, '/../../../assets')));
+registerVoiceRoutes(app, express);
 
 function fetchJson(url, timeoutMs = 10000) {
     return new Promise((resolve, reject) => {

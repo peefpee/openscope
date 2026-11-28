@@ -352,6 +352,111 @@
                     <div id="radar-preferences" class="menu-radar-prefs-grid"></div>
                 </details>
 
+                <details class="menu-card menu-voice-control-card">
+                    <summary>Voice control (beta)</summary>
+                    <div class="menu-voice-grid">
+                        <label class="menu-toggle">
+                            <input type="checkbox" id="vc-enabled">
+                            <span>Enable microphone push-to-talk</span>
+                        </label>
+                        <div class="menu-field-row">
+                            <label class="menu-field" for="vc-ptt-key">
+                                <span>Push-to-talk key</span>
+                                <input id="vc-ptt-key" type="text" readonly value="ControlLeft">
+                            </label>
+                            <label class="menu-field" for="vc-lang">
+                                <span>Recognition language</span>
+                                <select id="vc-lang">
+                                    <option value="en-AU">English (Australia)</option>
+                                    <option value="en-US">English (US)</option>
+                                    <option value="en-GB">English (UK)</option>
+                                </select>
+                            </label>
+                        </div>
+                        <div class="menu-field-row">
+                            <label class="menu-field" for="vc-device">
+                                <span>Microphone device</span>
+                                <select id="vc-device"><option value="">System default microphone</option></select>
+                            </label>
+                            <div class="menu-field menu-field--action">
+                                <span>Microphone permission</span>
+                                <button type="button" id="vc-test-mic" class="menu-btn-secondary">Test microphone</button>
+                            </div>
+                        </div>
+                        <p id="vc-mic-status" class="menu-voice-note" role="status"></p>
+
+                        <div class="menu-field-row">
+                            <label class="menu-field" for="vc-provider">
+                                <span>Speech recognition provider</span>
+                                <select id="vc-provider">
+                                    <option value="browser">Browser Speech API (external service)</option>
+                                    <option value="whisper-browser">Local Whisper (WebGPU / WASM)</option>
+                                    <option value="whisper-server">Custom Whisper Server</option>
+                                </select>
+                            </label>
+                            <label class="menu-field" for="vc-confirm-mode">
+                                <span>Command confirmation</span>
+                                <select id="vc-confirm-mode">
+                                    <option value="local-auto">Auto local / confirm LLM</option>
+                                    <option value="all-auto">Auto all unambiguous</option>
+                                    <option value="always-confirm">Always confirm</option>
+                                </select>
+                            </label>
+                        </div>
+                        <p id="vc-browser-note" class="menu-voice-note">Browser Speech API may send audio to an external cloud recognition service.</p>
+
+                        <div id="vc-whisper-browser-box" class="menu-voice-subbox" hidden>
+                            <label class="menu-field" for="vc-whisper-model">
+                                <span>Whisper English model</span>
+                                <select id="vc-whisper-model">
+                                    <option value="tiny.en">Tiny.en (~40 MB)</option>
+                                    <option value="base.en" selected>Base.en (~75 MB)</option>
+                                    <option value="small.en">Small.en (~240 MB)</option>
+                                </select>
+                            </label>
+                            <p id="vc-whisper-size" class="menu-voice-note"></p>
+                            <div class="menu-field-row">
+                                <button type="button" id="vc-whisper-prepare" class="menu-btn-secondary">Download / Load model</button>
+                                <button type="button" id="vc-whisper-clear" class="menu-btn-ghost">Clear cached model</button>
+                            </div>
+                            <p id="vc-whisper-status" class="menu-voice-note" role="status"></p>
+                        </div>
+
+                        <div id="vc-whisper-server-box" class="menu-voice-subbox" hidden>
+                            <div class="menu-field-row">
+                                <label class="menu-field" for="vc-whisper-url">
+                                    <span>Server URL</span>
+                                    <input id="vc-whisper-url" type="text" placeholder="http://localhost:8080/v1/audio/transcriptions">
+                                </label>
+                                <label class="menu-field" for="vc-whisper-server-model">
+                                    <span>Model ID</span>
+                                    <input id="vc-whisper-server-model" type="text" value="whisper-1">
+                                </label>
+                            </div>
+                            <button type="button" id="vc-whisper-test" class="menu-btn-secondary">Test Whisper server</button>
+                            <p id="vc-whisper-server-status" class="menu-voice-note" role="status"></p>
+                        </div>
+
+                        <label class="menu-toggle">
+                            <input type="checkbox" id="vc-llm-enabled">
+                            <span>Enable 9Router / LLM fallback for partial or unusual phrasing</span>
+                        </label>
+                        <div class="menu-field-row">
+                            <button type="button" id="vc-llm-test" class="menu-btn-secondary">Check LLM endpoint</button>
+                            <span id="vc-llm-status" class="menu-voice-note" role="status"></span>
+                        </div>
+
+                        <details class="menu-voice-parser-test">
+                            <summary>Text-only ATC parser tester (dry-run)</summary>
+                            <div class="menu-field-row">
+                                <input id="vc-parser-test-input" type="text" placeholder="e.g. Qantas four one two turn left heading two seven zero descend three thousand">
+                                <button type="button" id="vc-parser-test-run" class="menu-btn-secondary">Parse</button>
+                            </div>
+                            <pre id="vc-parser-test-output" class="menu-voice-pre"></pre>
+                        </details>
+                    </div>
+                </details>
+
                 <div class="menu-settings-footer">
                     <button type="button" class="menu-btn-secondary" data-action="fullscreen">Toggle fullscreen</button>
                     <button type="button" class="menu-btn-danger" data-action="reset">Reset client settings</button>

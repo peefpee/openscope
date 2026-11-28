@@ -257,3 +257,55 @@
         pointer-events: auto;
     }
 }
+
+.voice-status-bar {
+    position: fixed;
+    left: 12px;
+    bottom: 44px;
+    z-index: @controls-menu-z;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    max-width: ~"calc(100vw - 24px)";
+    padding: 4px 10px;
+    background: rgba(12, 22, 26, 0.9);
+    border: 1px solid rgba(143, 198, 211, 0.25);
+    border-radius: 4px;
+    color: #d7e5e4;
+    font-size: 11px;
+    font-family: monoOne, monospace;
+
+    &[hidden] { display: none; }
+    .voice-ptt-dot { width: 8px; height: 8px; border-radius: 50%; background: #6b7d82; flex-shrink: 0; }
+    .voice-level-meter { width: 34px; height: 4px; background: #1a2d33; border-radius: 2px; overflow: hidden; flex-shrink: 0; }
+    .voice-level-fill { display: block; height: 100%; width: 0; background: #91E8BC; transition: width 60ms linear; }
+    .voice-transcript { max-width: 28rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #91a8ae; }
+    .voice-debug-toggle, .voice-confirm-btn, .voice-reject-btn, .voice-test-run {
+        padding: 2px 6px; background: #192e33; border: 1px solid #3c5860; color: #e2f0ef; font: inherit; cursor: pointer; border-radius: 3px;
+    }
+    .voice-debug-panel {
+        position: absolute;
+        left: 0;
+        bottom: calc(~"100% + 6px");
+        width: 24rem;
+        max-width: ~"calc(100vw - 24px)";
+        padding: 8px 10px;
+        background: rgba(10, 19, 23, 0.96);
+        border: 1px solid rgba(143, 198, 211, 0.3);
+        border-radius: 4px;
+        display: grid;
+        gap: 4px;
+        &[hidden] { display: none; }
+    }
+    .voice-debug-test { display: flex; gap: 6px; margin-top: 4px; }
+    .voice-test-input { flex: 1; min-width: 0; background: #071216; border: 1px solid #3c5860; color: #e2f0ef; padding: 2px 6px; font: inherit; }
+
+    &.voice-state--transmitting .voice-ptt-dot { background: #ef8585; box-shadow: 0 0 6px #ef8585; }
+    &.voice-state--transcribing .voice-ptt-dot { background: #8fc6d3; }
+    &.voice-state--local_ok .voice-ptt-dot { background: #91e8bc; }
+    &.voice-state--llm_pending .voice-ptt-dot,
+    &.voice-state--llm_ok .voice-ptt-dot,
+    &.voice-state--confirm_required .voice-ptt-dot,
+    &.voice-state--clarification .voice-ptt-dot { background: #f2b875; }
+    &.voice-state--rejected .voice-ptt-dot { background: #ef8585; }
+}

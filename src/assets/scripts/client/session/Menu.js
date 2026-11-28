@@ -1,6 +1,7 @@
 import $ from 'jquery';
 import { controlsSettings } from '../ui/ScopeControls';
 import DatImportView from '../ui/DatImportView';
+import VoiceSettingsView from '../voice/ui/VoiceSettingsView';
 import navData from '../airport/dat/NavDataCache';
 import { GAME_OPTION_VALUES } from '../constants/gameOptionConstants';
 import {
@@ -636,6 +637,7 @@ export default class Menu {
         } else {
             this.menu.querySelector('[data-action=testVoice]').disabled = true;
         }
+        this.voiceSettings = new VoiceSettingsView(this.menu, this.settings, () => this.applySettings());
     }
 
     applySettings() {
@@ -657,5 +659,6 @@ export default class Menu {
         byId('voice-rate').value = this.settings.rate;
         byId('voice-volume').value = this.settings.volume;
         Object.entries(this.radarFields).forEach(([key, input]) => { input.value = this.settings.radar[key]; });
+        if (this.voiceSettings) this.voiceSettings.render();
     }
 }
