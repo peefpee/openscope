@@ -1,0 +1,65 @@
+// openScope Menu V2 Directional Page Transitions
+
+@keyframes menu-slide-in-forward {
+    from {
+        opacity: 0;
+        transform: translateX(22px);
+    }
+    to {
+        opacity: 1;
+        transform: translateX(0);
+    }
+}
+
+@keyframes menu-slide-in-backward {
+    from {
+        opacity: 0;
+        transform: translateX(-22px);
+    }
+    to {
+        opacity: 1;
+        transform: translateX(0);
+    }
+}
+
+@keyframes menu-overlay-in {
+    from {
+        opacity: 0;
+        transform: scale(0.975);
+    }
+    to {
+        opacity: 1;
+        transform: scale(1);
+    }
+}
+
+#session-menu[data-page-direction='forward'] section:not([hidden]) {
+    animation: menu-slide-in-forward 250ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+#session-menu[data-page-direction='backward'] section:not([hidden]) {
+    animation: menu-slide-in-backward 250ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+#session-menu[data-page-direction='none'] section:not([hidden]) {
+    animation: none;
+}
+
+#session-menu:not([data-page-direction]) section:not([hidden]) {
+    animation: menu-overlay-in 200ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+#session-menu section[data-page='settings']:not([hidden]),
+#session-menu section[data-page='pause']:not([hidden]),
+#session-menu section[data-page='confirm']:not([hidden]),
+#session-menu section[data-page='reset']:not([hidden]) {
+    animation: menu-overlay-in 190ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    #session-menu section:not([hidden]),
+    .menu-loading-spinner svg {
+        animation: none !important;
+        transition: none !important;
+    }
+}

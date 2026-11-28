@@ -1,0 +1,230 @@
+// openScope Menu V2 Form Controls & Button Variants
+
+.menu-v2-controls() {
+    button,
+    select,
+    input[type='text'],
+    input[type='search'],
+    input[type='number'],
+    input:not([type]) {
+        box-sizing: border-box;
+        font: inherit;
+        color: @menu-text;
+        border-radius: @menu-radius-sm;
+        transition: background-color @menu-transition-fast,
+                    border-color @menu-transition-fast,
+                    transform @menu-transition-fast,
+                    box-shadow @menu-transition-fast;
+    }
+
+    button {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: @menu-space-2;
+        padding: 0.72rem 1.2rem;
+        background: @menu-surface-elevated;
+        border: 1px solid @menu-border-strong;
+        color: @menu-text;
+        font-weight: 500;
+        letter-spacing: 0.01em;
+        cursor: pointer;
+        text-align: center;
+        user-select: none;
+
+        &:hover:not(:disabled) {
+            background: @menu-surface-hover;
+            border-color: @menu-secondary;
+        }
+
+        &:active:not(:disabled) {
+            transform: translateY(1px);
+            background: @menu-surface-active;
+        }
+
+        &:disabled {
+            opacity: 0.45;
+            cursor: not-allowed;
+        }
+
+        &.menu-btn-primary {
+            background: @menu-accent;
+            border-color: @menu-accent;
+            color: @menu-bg-deep;
+            font-weight: 700;
+
+            &:hover:not(:disabled) {
+                background: @menu-accent-strong;
+                border-color: @menu-accent-strong;
+                box-shadow: 0 0 20px rgba(145, 232, 188, 0.24);
+            }
+
+            &:active:not(:disabled) {
+                background: @menu-accent;
+            }
+        }
+
+        &.menu-btn-secondary {
+            background: rgba(16, 35, 41, 0.85);
+            border-color: @menu-border-strong;
+            color: @menu-text;
+
+            &:hover:not(:disabled) {
+                background: @menu-surface-hover;
+                border-color: @menu-secondary;
+                color: @menu-text;
+            }
+        }
+
+        &.menu-btn-ghost {
+            background: transparent;
+            border-color: @menu-border;
+            color: @menu-text-muted;
+
+            &:hover:not(:disabled) {
+                background: @menu-secondary-dim;
+                border-color: @menu-border-strong;
+                color: @menu-text;
+            }
+        }
+
+        &.menu-btn-danger {
+            background: @menu-danger-dim;
+            border-color: rgba(239, 133, 133, 0.48);
+            color: @menu-danger;
+
+            &:hover:not(:disabled) {
+                background: rgba(239, 133, 133, 0.24);
+                border-color: @menu-danger;
+                color: #ffd4d4;
+            }
+        }
+
+        &.menu-btn-lg {
+            padding: 0.9rem 1.65rem;
+            font-size: 1.02rem;
+            border-radius: @menu-radius-md;
+        }
+    }
+
+    select,
+    input[type='text'],
+    input[type='search'],
+    input[type='number'],
+    input:not([type]) {
+        width: 100%;
+        padding: 0.6rem 0.8rem;
+        background: @menu-bg-deep;
+        border: 1px solid @menu-border-strong;
+        color: @menu-text;
+        font-size: 0.94rem;
+
+        &::placeholder {
+            color: @menu-text-dim;
+        }
+
+        &:hover:not(:disabled) {
+            border-color: @menu-secondary;
+        }
+
+        &:focus {
+            outline: none;
+            border-color: @menu-accent;
+            box-shadow: 0 0 0 2px rgba(145, 232, 188, 0.2);
+        }
+
+        &:disabled {
+            opacity: 0.45;
+            cursor: not-allowed;
+        }
+    }
+
+    select {
+        appearance: none;
+        padding-right: 2.2rem;
+        background-image: linear-gradient(45deg, transparent 50%, @menu-secondary 50%),
+                          linear-gradient(135deg, @menu-secondary 50%, transparent 50%);
+        background-position: calc(~"100% - 16px") 50%, calc(~"100% - 11px") 50%;
+        background-size: 5px 5px, 5px 5px;
+        background-repeat: no-repeat;
+        cursor: pointer;
+
+        option {
+            background: @menu-surface;
+            color: @menu-text;
+        }
+    }
+
+    input[type='checkbox'] {
+        appearance: none;
+        width: 1.15rem;
+        height: 1.15rem;
+        flex: 0 0 auto;
+        margin: 0;
+        border: 1px solid @menu-border-strong;
+        border-radius: 3px;
+        background: @menu-bg-deep;
+        display: inline-grid;
+        place-content: center;
+        cursor: pointer;
+        transition: background-color @menu-transition-fast, border-color @menu-transition-fast;
+
+        &::before {
+            content: '';
+            width: 0.6rem;
+            height: 0.6rem;
+            transform: scale(0);
+            transition: transform 120ms ease-in-out;
+            box-shadow: inset 1em 1em @menu-bg-deep;
+            clip-path: polygon(14% 44%, 0 65%, 50% 100%, 100% 16%, 80% 0%, 43% 62%);
+        }
+
+        &:checked {
+            background: @menu-accent;
+            border-color: @menu-accent;
+
+            &::before {
+                transform: scale(1);
+            }
+        }
+
+        &:hover:not(:disabled) {
+            border-color: @menu-accent;
+        }
+    }
+
+    input[type='range'] {
+        appearance: none;
+        width: 100%;
+        height: 6px;
+        border-radius: 999px;
+        background: @menu-surface-active;
+        border: 1px solid @menu-border;
+        cursor: pointer;
+
+        &::-webkit-slider-thumb {
+            appearance: none;
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            background: @menu-accent;
+            border: 2px solid @menu-bg-deep;
+            box-shadow: 0 0 0 1px @menu-accent;
+            cursor: pointer;
+        }
+
+        &::-moz-range-thumb {
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            background: @menu-accent;
+            border: 2px solid @menu-bg-deep;
+            cursor: pointer;
+        }
+    }
+
+    :focus-visible {
+        outline: 2px solid @menu-accent;
+        outline-offset: 2px;
+    }
+}
