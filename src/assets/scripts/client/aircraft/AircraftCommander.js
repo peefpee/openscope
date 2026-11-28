@@ -173,21 +173,6 @@ export default class AircraftCommander {
                 aircraft.awaitingIdentification = false;
                 aircraft.identified = true;
                 aircraft.identificationTime = TimeKeeper.accumulatedDeltaTime;
-                const airport = AirportController.airport_get();
-                const config = airport && airport.controllerConfig;
-                const approach = config && typeof config.getApproach === 'function' ? config.getApproach() : null;
-                const facilityName = (config && typeof config.getRadioNameForController === 'function' &&
-                    config.getRadioNameForController(approach, CONTROLLER_TYPE.APP)) || 'Approach';
-                const instrLog = r_log ? `, ${r_log}` : '';
-                const instrSay = r_say ? `, ${radio_spokenText(r_say)}` : '';
-                UiController.ui_log(`${aircraft.readbackCallsign}, ${facilityName}, identified${instrLog}.`, false);
-                speech_say(
-                    [
-                        { type: 'callsign', content: aircraft },
-                        { type: 'text', content: `, ${facilityName}, identified${instrSay}` }
-                    ],
-                    aircraft.pilotVoice
-                );
             }
 
             if (r_log) {

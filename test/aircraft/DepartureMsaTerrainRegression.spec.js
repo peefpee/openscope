@@ -77,7 +77,7 @@ test.serial('1. Departure operations: Tower ownership, initial contact phraseolo
         t.false(dep.identified);
         t.false(logs.slice(prevCount).some((l) => l.msg.includes('identified')));
 
-        // First successful multi-instruction command includes `identified` ONCE in controller transmission
+        // First successful multi-instruction command marks aircraft identified without speaking controller phrase
         const beforeFirstOk = logs.length;
         const parsed = new CommandParser('QFA150 a 100 h 270').parse();
         commander.runCommands(dep, parsed.args);
@@ -85,22 +85,21 @@ test.serial('1. Departure operations: Tower ownership, initial contact phraseolo
         t.true(dep.identified);
         const firstBatchLogs = logs.slice(beforeFirstOk).map((l) => l.msg);
         const identLogs = firstBatchLogs.filter((m) => m.includes('identified'));
-        t.is(identLogs.length, 1);
-        t.true(identLogs[0].includes('Sydney Approach, identified'));
+        t.is(identLogs.length, 0);
 
         // Subsequent instruction omits `identified`
         const beforeSecond = logs.length;
         commander.runCommands(dep, [['altitude', '120']]);
         t.false(logs.slice(beforeSecond).some((l) => l.msg.includes('identified')));
 
-        // Standalone `identified` command works when awaitingIdentification is set
+        // Standalone `identified` command works when awaitingIdentification is set without speaking controller phrase
         dep.awaitingIdentification = true;
         dep.identified = false;
         const beforeStandalone = logs.length;
         commander.runCommands(dep, [['identified']]);
         t.false(dep.awaitingIdentification);
         t.true(dep.identified);
-        t.true(logs.slice(beforeStandalone).some((l) => l.msg.includes('Sydney Approach, identified.')));
+        t.false(logs.slice(beforeStandalone).some((l) => l.msg.includes('identified')));
 
         // Departure toggle defaults to OFF for Australian airports and persists per airport
         delete localStorage['openscope-au-departures-YSSY'];
