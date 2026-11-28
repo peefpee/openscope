@@ -1,0 +1,205 @@
+// openScope Menu V2 Styling for #dat-import (Custom Australian CIFP Import)
+// Preserves all Codex-owned #dat-import DOM IDs, classes, and behaviours.
+
+#dat-import {
+    position: fixed;
+    inset: 0;
+    margin: auto;
+    width: ~"min(46rem, 94vw)";
+    max-height: 90vh;
+    padding: @menu-space-5;
+    box-sizing: border-box;
+    border: 1px solid @menu-border-strong;
+    border-top: 3px solid @menu-accent;
+    border-radius: @menu-radius-lg;
+    background: @menu-surface;
+    color: @menu-text;
+    font-family: @menu-font-sans;
+    font-size: 14px;
+    line-height: 1.5;
+    box-shadow: @menu-shadow-card;
+    overflow-y: auto;
+
+    &::backdrop {
+        background: rgba(4, 11, 14, 0.82);
+    }
+
+    &[open] {
+        display: grid;
+        gap: @menu-space-3;
+        animation: menu-overlay-in 200ms cubic-bezier(0.22, 1, 0.36, 1) both;
+    }
+
+    header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: @menu-space-3;
+        padding-bottom: @menu-space-3;
+        border-bottom: 1px solid @menu-border;
+
+        h2 {
+            margin: 0;
+            font-size: 1.2rem;
+            font-weight: 700;
+            color: @menu-text;
+        }
+
+        button {
+            width: 2.2rem;
+            height: 2.2rem;
+            padding: 0;
+            border-radius: @menu-radius-sm;
+            background: @menu-bg-deep;
+            border: 1px solid @menu-border-strong;
+            color: @menu-text-muted;
+            font-size: 1.3rem;
+            line-height: 1;
+            cursor: pointer;
+
+            &:hover {
+                color: @menu-text;
+                border-color: @menu-accent;
+            }
+        }
+    }
+
+    label {
+        display: flex;
+        align-items: baseline;
+        justify-content: space-between;
+        gap: @menu-space-2;
+        font-weight: 500;
+        color: @menu-text;
+        margin-top: @menu-space-1;
+
+        small {
+            font-family: @menu-font-mono;
+            font-size: 0.76rem;
+            color: @menu-text-muted;
+        }
+    }
+
+    input[type='file'] {
+        width: 100%;
+        box-sizing: border-box;
+        padding: @menu-space-3;
+        border: 1px dashed @menu-border-strong;
+        border-radius: @menu-radius-md;
+        background: @menu-bg-deep;
+        color: @menu-text-muted;
+        font-family: @menu-font-mono;
+        font-size: 0.82rem;
+        cursor: pointer;
+        transition: border-color @menu-transition-fast, background-color @menu-transition-fast;
+
+        &:hover {
+            border-color: @menu-accent;
+            background: rgba(145, 232, 188, 0.05);
+        }
+    }
+
+    .dat-cached {
+        padding: @menu-space-3;
+        border-radius: @menu-radius-md;
+        background: @menu-bg-deep;
+        border: 1px solid @menu-border;
+        display: grid;
+        gap: @menu-space-2;
+    }
+
+    .dat-fix-source,
+    .dat-msa-source,
+    .dat-airspace-source {
+        font-family: @menu-font-mono;
+        font-size: 0.78rem;
+        color: @menu-secondary;
+    }
+
+    .dat-cache-status {
+        margin: 0;
+        font-size: 0.82rem;
+        color: @menu-text-muted;
+    }
+
+    .dat-status {
+        margin: 0;
+        padding: @menu-space-3;
+        border-radius: @menu-radius-sm;
+        background: @menu-secondary-dim;
+        border: 1px solid @menu-border-strong;
+        font-family: @menu-font-mono;
+        font-size: 0.84rem;
+        color: @menu-accent;
+    }
+
+    .dat-results {
+        max-height: 14rem;
+        overflow-y: auto;
+        display: grid;
+        gap: @menu-space-2;
+
+        &:empty {
+            display: none;
+        }
+
+        details {
+            padding: @menu-space-2 @menu-space-3;
+            border-radius: @menu-radius-sm;
+            background: @menu-bg-deep;
+            border: 1px solid @menu-border;
+
+            summary {
+                cursor: pointer;
+                font-family: @menu-font-mono;
+                font-size: 0.82rem;
+                color: @menu-secondary;
+            }
+        }
+    }
+
+    footer {
+        display: grid;
+        gap: @menu-space-3;
+        padding-top: @menu-space-4;
+        border-top: 1px solid @menu-border-strong;
+
+        &[hidden] {
+            display: none;
+        }
+    }
+
+    .dat-terrain-section {
+        display: grid;
+        gap: @menu-space-2;
+        padding: @menu-space-3;
+        border-radius: @menu-radius-md;
+        background: @menu-bg-deep;
+        border: 1px solid @menu-border;
+
+        &[hidden] {
+            display: none;
+        }
+    }
+
+    .dat-terrain-actions {
+        display: flex;
+        gap: @menu-space-2;
+    }
+
+    .dat-open {
+        background: @menu-accent;
+        border-color: @menu-accent;
+        color: @menu-bg-deep;
+        font-weight: 700;
+        padding: 0.8rem 1.4rem;
+        border-radius: @menu-radius-md;
+        cursor: pointer;
+
+        &:hover {
+            background: @menu-accent-strong;
+        }
+    }
+
+    .menu-v2-controls();
+}
