@@ -135,6 +135,9 @@ export default class MenuVisualController {
         if (target.id === 'session-airport') {
             this._syncAirportCards();
             this._syncClassicPreview();
+            if (this.globe && target.value) {
+                this.globe.setSelected(target.value.toUpperCase(), false);
+            }
         } else if (
             target.closest('#session-setup-traffic') ||
             target.id === 'session-runways'

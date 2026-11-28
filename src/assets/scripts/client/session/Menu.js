@@ -545,6 +545,8 @@ export default class Menu {
         }
 
         this.publishPreview(null);
+        this.metaRequestId = (this.metaRequestId || 0) + 1;
+        const reqId = this.metaRequestId;
         const entry = this.catalogue.find((a) => a.icao === icao);
         const activeSource = this.preferredSources.get(icao) || (entry && entry.hasBundled ? 'bundled' : 'imported');
         const label = entry ? `${entry.icao} · ${entry.name}` : icao;
@@ -585,7 +587,7 @@ export default class Menu {
         }
 
         const data = await this.loadClassicAirportData(icao);
-        if (this.page !== 'classic' || select.value.toUpperCase() !== icao) return;
+        if (reqId !== this.metaRequestId || this.page !== 'classic' || select.value.toUpperCase() !== icao) return;
         const importedAirspace = navData.getCompatibleRecord('au-airspace', { icao });
         this.publishPreview(airportPreview(data, null, importedAirspace));
         const runways = Array.isArray(data.runways) ? data.runways.map((r) => r.name.join('/')).join(', ') : '';

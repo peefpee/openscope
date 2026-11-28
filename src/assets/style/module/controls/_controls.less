@@ -2,6 +2,9 @@
     list-style-type: none;
     margin: 0;
     padding: 0;
+    display: flex;
+    align-items: center;
+    flex-shrink: 0;
     // the dropdowns sit above the bar, so they must not be clipped here
     overflow: visible;
     z-index: @controls-menu-z;
@@ -10,8 +13,8 @@
 .control-item {
     // anchor the dropdown to its own icon instead of the page body
     position: relative;
-    float: left;
-    display: inline-block;
+    display: inline-flex;
+    align-items: center;
 }
 
 .control-item:hover .control-icon,
@@ -54,12 +57,17 @@
 
 .control-item-content {
     position: absolute;
-    left: 0;
-    // the icon's containing block is only 36px wide, so an unconstrained
-    // absolutely positioned menu would shrink-wrap and wrap every label;
-    // size it to its content instead
+    left: auto;
+    right: 0;
+    // bottom-right toolbar popups expand upwards and to the left by default
+    // so they remain inside the radar iframe viewport
     width: max-content;
-    max-width: ~"calc(100vw - 20px)";
+    min-width: 11rem;
+    max-width: ~"calc(100vw - 16px)";
+    max-height: ~"calc(100vh - 52px)";
+    overflow-y: auto;
+    overflow-x: hidden;
+    box-sizing: border-box;
     // sit flush on top of the icon; the padding provides a hover bridge so
     // moving the pointer from the icon to the menu never leaves the item
     bottom: 100%;
@@ -68,7 +76,7 @@
     opacity: 0;
     pointer-events: none;
     background-color: @dark;
-    box-shadow: 0 8px 16px 0 rgba(0, 0, 0, 0.2);
+    box-shadow: 0 8px 16px 0 rgba(0, 0, 0, 0.35);
     z-index: @controls-menu-z;
     transition: opacity 0.1s ease, visibility 0s linear 0.1s;
 }
@@ -102,11 +110,12 @@
 .control-item-content a {
     color: @medium-light-gray;
     text-decoration: none;
-    display: block;
+    display: flex;
+    align-items: center;
     text-align: left;
+    white-space: nowrap;
     cursor: pointer;
-    clear: both;
-    padding-right: calc(@command-bar-height / 4);
+    padding-right: 12px;
 
     /*disable text selection*/
     -webkit-touch-callout: none; /* iOS Safari */
@@ -121,7 +130,7 @@
 }
 
 .control-item-content a img {
-    float: left;
+    flex-shrink: 0;
 }
 
 .control-item-content a span {

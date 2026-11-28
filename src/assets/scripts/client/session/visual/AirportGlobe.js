@@ -272,13 +272,17 @@ export default class AirportGlobe {
             this.dragging = true;
             this.dragMoved = false;
             this.targetView = null;
+            this.downPointer = { x: e.clientX, y: e.clientY };
             this.lastPointer = { x: e.clientX, y: e.clientY };
         };
         this._onPointerMove = (e) => {
             if (!this.dragging || !this.lastPointer) return;
             const dx = e.clientX - this.lastPointer.x;
             const dy = e.clientY - this.lastPointer.y;
-            if (Math.abs(dx) > 2 || Math.abs(dy) > 2) this.dragMoved = true;
+            if (this.downPointer &&
+                (Math.abs(e.clientX - this.downPointer.x) > 5 || Math.abs(e.clientY - this.downPointer.y) > 5)) {
+                this.dragMoved = true;
+            }
             this.lastPointer = { x: e.clientX, y: e.clientY };
             const sensitivity = 0.24 / Math.max(0.8, this.zoom * 0.55);
             this.lon -= dx * sensitivity;
@@ -288,6 +292,10 @@ export default class AirportGlobe {
         this._onPointerUp = () => {
             this.dragging = false;
             this.lastPointer = null;
+            this.downPointer = null;
+            setTimeout(() => {
+                this.dragMoved = false;
+            }, 0);
         };
         this._onWheel = (e) => {
             e.preventDefault();
@@ -482,7 +490,9 @@ export default class AirportGlobe {
 
     _rebuildMarkers() {
         if (!this.markerLayer) return;
-        this.markerLayer.replaceChildren();
+        while (this.markerLayer.firstChild) {
+            this.markerLayer.removeChild(this.markerLayer.firstChild);
+        }
         this.markerNodes.clear();
 
         this.airports.forEach((entry) => {
@@ -504,7 +514,8 @@ export default class AirportGlobe {
 
             btn.addEventListener('click', (e) => {
                 e.stopPropagation();
-                if (this.dragMoved) return;
+                if (this.dragging && this.dragMoved) return;
+                this.targetView = null;
                 this.onSelect(entry.icao);
             });
 

@@ -411,14 +411,47 @@ class UiController {
      * @method _setupControlMenus
      * @private
      */
+    _positionControlPopup(item) {
+        if (!item) return;
+        const popup = item.querySelector('.control-item-content');
+        if (!popup) return;
+
+        popup.style.left = 'auto';
+        popup.style.right = '0';
+        popup.style.transform = '';
+
+        const vw = window.innerWidth || document.documentElement.clientWidth || 1280;
+        const vh = window.innerHeight || document.documentElement.clientHeight || 720;
+        const itemRect = item.getBoundingClientRect();
+        const availHeight = Math.max(120, Math.floor(itemRect.top - 8));
+        popup.style.maxHeight = `${availHeight}px`;
+
+        const rect = popup.getBoundingClientRect();
+        if (rect.width > vw - 16) {
+            popup.style.maxWidth = `${Math.max(160, vw - 16)}px`;
+        }
+        const updatedRect = popup.getBoundingClientRect();
+        let shiftX = 0;
+        if (updatedRect.left < 8) {
+            shiftX = Math.ceil(8 - updatedRect.left);
+        } else if (updatedRect.right > vw - 8) {
+            shiftX = Math.floor((vw - 8) - updatedRect.right);
+        }
+        if (shiftX !== 0) {
+            popup.style.transform = `translateX(${shiftX}px)`;
+        }
+    }
+
     _setupControlMenus() {
         const $menuItems = this.$element
             .find('.control-item')
             .filter((index, element) => element.querySelector('.control-item-content') !== null);
 
-        $menuItems.on('mouseenter', (event) => {
+        $menuItems.on('mouseenter focusin', (event) => {
             clearTimeout(this._controlMenuCloseTimeout);
-            $(event.currentTarget).addClass('is-open');
+            const item = event.currentTarget;
+            $(item).addClass('is-open');
+            this._positionControlPopup(item);
         });
 
         $menuItems.on('mouseleave', (event) => {
@@ -427,6 +460,12 @@ class UiController {
             clearTimeout(this._controlMenuCloseTimeout);
             this._controlMenuCloseTimeout = setTimeout(() => $item.removeClass('is-open'), 150);
         });
+
+        this._onControlMenuResize = () => {
+            this.$element.find('.control-item.is-open').each((_, item) => this._positionControlPopup(item));
+        };
+        window.addEventListener('resize', this._onControlMenuResize);
+        document.addEventListener('fullscreenchange', this._onControlMenuResize);
     }
 
     /**
@@ -459,10 +498,15 @@ class UiController {
 
         this.msaView.destroy();
         clearTimeout(this._controlMenuCloseTimeout);
+        if (this._onControlMenuResize) {
+            window.removeEventListener('resize', this._onControlMenuResize);
+            document.removeEventListener('fullscreenchange', this._onControlMenuResize);
+            this._onControlMenuResize = null;
+        }
         this.$element
             .find('.control-item')
             .filter((index, element) => element.querySelector('.control-item-content') !== null)
-            .off('mouseenter mouseleave')
+            .off('mouseenter focusin mouseleave')
             .removeClass('is-open');
 
         return this();
